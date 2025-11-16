@@ -1,0 +1,25 @@
+{
+  "timestamp": "2025-11-14T19:09:42.324551",
+  "paper_trading": true,
+  "tests_run": [],
+  "tests_passed": 0,
+  "tests_failed": 0,
+  "performance_results": {},
+  "recommendations": [],
+  "health_check": {
+    "openalgo": [
+      false,
+      "OpenAlgo connection failed: HTTPConnectionPool(host='127.0.0.1', port=5000): Read timed out. (read timeout=10)"
+    ],
+    "zmq_bus": [
+      false,
+      "ZMQ message not received within timeout"
+    ],
+    "execution_bridge": [
+      true,
+      "Execution Bridge appears to be running"
+    ]
+  },
+  "status": "FAILED",
+  "failure_reason": "Component health check failed"
+}

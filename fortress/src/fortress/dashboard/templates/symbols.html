@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row g-3">
+  <div class="col-12">
+    <h4 class="text-light">Symbol Management</h4>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-md-6">
+    <div class="card bg-secondary text-light">
+      <div class="card-body">
+        <h6 class="card-title">Registered Symbols</h6>
+        <div id="symbolsList" class="list-group list-group-flush"></div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card bg-secondary text-light">
+      <div class="card-body">
+        <h6 class="card-title">Active Futures Contracts</h6>
+        <div id="activeContracts" class="list-group list-group-flush"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mt-1">
+  <div class="col-md-12">
+    <div class="card bg-secondary text-light">
+      <div class="card-body">
+        <h6 class="card-title">Expiring Contracts</h6>
+        <div class="mb-3">
+          <label for="expiryDays" class="form-label">Days to Expiry:</label>
+          <select id="expiryDays" class="form-select form-select-sm bg-dark text-light">
+            <option value="3">3 days</option>
+            <option value="7" selected>7 days</option>
+            <option value="14">14 days</option>
+            <option value="30">30 days</option>
+          </select>
+        </div>
+        <div id="expiringContracts" class="list-group list-group-flush"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mt-1">
+  <div class="col-md-12">
+    <div class="card bg-secondary text-light">
+      <div class="card-body">
+        <h6 class="card-title">Contract Rollover</h6>
+        <div class="input-group mb-3">
+          <input type="text" id="rolloverSymbol" class="form-control bg-dark text-light" placeholder="Symbol (e.g., NIFTY)">
+          <button class="btn btn-primary" onclick="requestRollover()">Request Rollover</button>
+        </div>
+        <div id="rolloverStatus" class="alert alert-info d-none"></div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadSymbols() {
+  try {
+    const response = await fetch('/api/symbols');
+    const data = await response.json();
+    const symbolsList = document.getElementById('symbolsList');
+    symbolsList.innerHTML = '';
+    
+    data.symbols.forEach(symbol => {
+      const item = document.createElement('div');
+      item.className = 'list-group-item';
+      item.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <strong>${symbol.symbol}</strong>
+            <small class="text-muted d-block">${symbol.name || 'N/A'}</small>
+          </div>
+          <span class="badge bg-primary">${symbol.symbol_type}</span>
+        </div>
+      `;
+      symbolsList.appendChild(item);
+    });
+  } catch (error) {
+    console.error('Failed to load symbols:', error);
+  }
+}
+
+async function loadActiveContracts() {
+  try {
+    const response = await fetch('/api/futures/active');
+    const data = await response.json();
+    const contractsList = document.getElementById('activeContracts');
+    contractsList.innerHTML = '';
+    
+    Object.entries(data.active_contracts).forEach(([symbol, contract]) => {
+      const item = document.createElement('div');
+      item.className = 'list-group-item';
+      item.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <strong>${symbol}</strong>
+            <small class="text-muted d-block">Contract: ${contract}</small>
+          </div>
+          <span class="badge bg-success">Active</span>
+        </div>
+      `;
+      contractsList.appendChild(item);
+    });
+  } catch (error) {
+    console.error('Failed to load active contracts:', error);
+  }
+}
+
+async function loadExpiringContracts() {
+  const days = document.getElementById('expiryDays').value;
+  try {
+    const response = await fetch(`/api/futures/expiring?days=${days}`);
+    const data = await response.json();
+    const contractsList = document.getElementById('expiringContracts');
+    contractsList.innerHTML = '';
+    
+    if (data.expiring_contracts.length === 0) {
+      contractsList.innerHTML = '<div class="text-muted">No contracts expiring within ' + days + ' days</div>';
+      return;
+    }
+    
+    data.expiring_contracts.forEach(contract => {
+      const item = document.createElement('div');
+      item.className = 'list-group-item';
+      const daysToExpiry = Math.ceil((new Date(contract.expiry_date) - new Date()) / (1000 * 60 * 60 * 24));
+      item.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <strong>${contract.symbol}</strong>
+            <small class="text-muted d-block">Expiry: ${new Date(contract.expiry_date).toLocaleDateString()}</small>
+          </div>
+          <span class="badge ${daysToExpiry <= 3 ? 'bg-danger' : daysToExpiry <= 7 ? 'bg-warning' : 'bg-info'}">${daysToExpiry} days</span>
+        </div>
+      `;
+      contractsList.appendChild(item);
+    });
+  } catch (error) {
+    console.error('Failed to load expiring contracts:', error);
+  }
+}
+
+async function requestRollover() {
+  const symbol = document.getElementById('rolloverSymbol').value.trim().toUpperCase();
+  if (!symbol) {
+    alert('Please enter a symbol');
+    return;
+  }
+  
+  try {
+    const response = await fetch(`/api/futures/rollover/${symbol}`, {
+      method: 'POST'
+    });
+    const data = await response.json();
+    
+    const statusDiv = document.getElementById('rolloverStatus');
+    statusDiv.className = 'alert alert-success';
+    statusDiv.textContent = `Rollover requested successfully. Request ID: ${data.request_id}`;
+    statusDiv.classList.remove('d-none');
+    
+    // Clear input
+    document.getElementById('rolloverSymbol').value = '';
+    
+    // Reload data after a delay
+    setTimeout(() => {
+      loadActiveContracts();
+      loadExpiringContracts();
+    }, 2000);
+    
+  } catch (error) {
+    const statusDiv = document.getElementById('rolloverStatus');
+    statusDiv.className = 'alert alert-danger';
+    statusDiv.textContent = 'Failed to request rollover: ' + error.message;
+    statusDiv.classList.remove('d-none');
+  }
+}
+
+// Event listeners
+document.getElementById('expiryDays').addEventListener('change', loadExpiringContracts);
+
+// Load data on page load
+document.addEventListener('DOMContentLoaded', function() {
+  loadSymbols();
+  loadActiveContracts();
+  loadExpiringContracts();
+  
+  // Refresh data every 30 seconds
+  setInterval(() => {
+    loadActiveContracts();
+    loadExpiringContracts();
+  }, 30000);
+});
+</script>
+{% endblock %}

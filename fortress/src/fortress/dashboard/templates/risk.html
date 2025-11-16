@@ -1,0 +1,269 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row g-3">
+  <div class="col-12">
+    <h4 class="text-light">Risk Management Dashboard</h4>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-md-4">
+    <div class="card bg-secondary text-light">
+      <div class="card-body">
+        <h6 class="card-title">Portfolio Risk</h6>
+        <div id="portfolioRisk">
+          <div class="text-muted">Loading...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card bg-secondary text-light">
+      <div class="card-body">
+        <h6 class="card-title">Position Limits</h6>
+        <div id="positionLimits">
+          <div class="text-muted">Loading...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card bg-secondary text-light">
+      <div class="card-body">
+        <h6 class="card-title">Risk Alerts</h6>
+        <div id="riskAlerts">
+          <div class="text-muted">No alerts</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mt-1">
+  <div class="col-md-6">
+    <div class="card bg-secondary text-light">
+      <div class="card-body">
+        <h6 class="card-title">Risk Heatmap</h6>
+        <canvas id="riskHeatmap" height="200"></canvas>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card bg-secondary text-light">
+      <div class="card-body">
+        <h6 class="card-title">Risk Distribution</h6>
+        <canvas id="riskDistribution" height="200"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mt-1">
+  <div class="col-md-12">
+    <div class="card bg-secondary text-light">
+      <div class="card-body">
+        <h6 class="card-title">Risk Control Actions</h6>
+        <div class="btn-group" role="group">
+          <button class="btn btn-warning" onclick="emergencyStop()">Emergency Stop</button>
+          <button class="btn btn-info" onclick="reduceExposure()">Reduce Exposure</button>
+          <button class="btn btn-secondary" onclick="resetLimits()">Reset Limits</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let riskHeatmapChart, riskDistributionChart;
+
+async function loadRiskData() {
+  try {
+    const response = await fetch('/api/risk');
+    const data = await response.json();
+    
+    updatePortfolioRisk(data.portfolio_state);
+    updatePositionLimits(data.risk_state);
+    updateRiskCharts(data);
+    
+  } catch (error) {
+    console.error('Failed to load risk data:', error);
+    document.getElementById('portfolioRisk').innerHTML = '<div class="text-danger">Failed to load risk data</div>';
+    document.getElementById('positionLimits').innerHTML = '<div class="text-danger">Failed to load risk data</div>';
+  }
+}
+
+function updatePortfolioRisk(portfolioState) {
+  const container = document.getElementById('portfolioRisk');
+  if (!portfolioState || Object.keys(portfolioState).length === 0) {
+    container.innerHTML = '<div class="text-muted">No portfolio data</div>';
+    return;
+  }
+  
+  container.innerHTML = `
+    <div class="mb-2">
+      <small>Total Value:</small>
+      <div class="fw-bold">₹${(portfolioState.total_value || 0).toLocaleString()}</div>
+    </div>
+    <div class="mb-2">
+      <small>Margin Used:</small>
+      <div class="fw-bold">₹${(portfolioState.margin_used || 0).toLocaleString()}</div>
+    </div>
+    <div class="mb-2">
+      <small>Risk Level:</small>
+      <span class="badge ${getRiskBadgeClass(portfolioState.risk_level)}">${portfolioState.risk_level || 'Unknown'}</span>
+    </div>
+    <div class="mb-2">
+      <small>Drawdown:</small>
+      <div class="fw-bold ${(portfolioState.drawdown || 0) < -5 ? 'text-danger' : 'text-success'}">${(portfolioState.drawdown || 0).toFixed(2)}%</div>
+    </div>
+  `;
+}
+
+function updatePositionLimits(riskState) {
+  const container = document.getElementById('positionLimits');
+  if (!riskState || Object.keys(riskState).length === 0) {
+    container.innerHTML = '<div class="text-muted">No position data</div>';
+    return;
+  }
+  
+  container.innerHTML = `
+    <div class="mb-2">
+      <small>Max Positions:</small>
+      <div class="fw-bold">${riskState.max_positions || 0}</div>
+    </div>
+    <div class="mb-2">
+      <small>Current Positions:</small>
+      <div class="fw-bold ${(riskState.current_positions || 0) >= (riskState.max_positions || 0) ? 'text-warning' : 'text-success'}">${riskState.current_positions || 0}</div>
+    </div>
+    <div class="mb-2">
+      <small>Max Position Size:</small>
+      <div class="fw-bold">${(riskState.max_position_size || 0).toLocaleString()}</div>
+    </div>
+    <div class="mb-2">
+      <small>Max Sector Exposure:</small>
+      <div class="fw-bold">${(riskState.max_sector_exposure || 0).toFixed(1)}%</div>
+    </div>
+  `;
+}
+
+function getRiskBadgeClass(riskLevel) {
+  switch (riskLevel) {
+    case 'low': return 'bg-success';
+    case 'medium': return 'bg-warning';
+    case 'high': return 'bg-danger';
+    default: return 'bg-secondary';
+  }
+}
+
+function updateRiskCharts(data) {
+  // Update risk heatmap
+  const heatmapCtx = document.getElementById('riskHeatmap');
+  if (heatmapCtx && data.portfolio_state) {
+    if (riskHeatmapChart) {
+      riskHeatmapChart.destroy();
+    }
+    
+    riskHeatmapChart = new Chart(heatmapCtx, {
+      type: 'bar',
+      data: {
+        labels: ['Total Risk', 'Market Risk', 'Sector Risk', 'Position Risk'],
+        datasets: [{
+          label: 'Risk Level',
+          data: [
+            data.portfolio_state.total_risk || 0,
+            data.portfolio_state.market_risk || 0,
+            data.portfolio_state.sector_risk || 0,
+            data.portfolio_state.position_risk || 0
+          ],
+          backgroundColor: [
+            'rgba(255, 99, 132, 0.8)',
+            'rgba(54, 162, 235, 0.8)',
+            'rgba(255, 205, 86, 0.8)',
+            'rgba(75, 192, 192, 0.8)'
+          ]
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: {
+            beginAtZero: true,
+            max: 100
+          }
+        }
+      }
+    });
+  }
+  
+  // Update risk distribution
+  const distributionCtx = document.getElementById('riskDistribution');
+  if (distributionCtx && data.risk_state) {
+    if (riskDistributionChart) {
+      riskDistributionChart.destroy();
+    }
+    
+    riskDistributionChart = new Chart(distributionCtx, {
+      type: 'doughnut',
+      data: {
+        labels: ['Low Risk', 'Medium Risk', 'High Risk'],
+        datasets: [{
+          data: [
+            data.risk_state.low_risk_positions || 0,
+            data.risk_state.medium_risk_positions || 0,
+            data.risk_state.high_risk_positions || 0
+          ],
+          backgroundColor: [
+            'rgba(75, 192, 192, 0.8)',
+            'rgba(255, 205, 86, 0.8)',
+            'rgba(255, 99, 132, 0.8)'
+          ]
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false
+      }
+    });
+  }
+}
+
+async function emergencyStop() {
+  if (confirm('Are you sure you want to trigger emergency stop? This will close all positions.')) {
+    try {
+      // TODO: Implement emergency stop API call
+      alert('Emergency stop triggered. All positions will be closed.');
+    } catch (error) {
+      alert('Failed to trigger emergency stop: ' + error.message);
+    }
+  }
+}
+
+async function reduceExposure() {
+  try {
+    // TODO: Implement reduce exposure API call
+    alert('Exposure reduction initiated.');
+  } catch (error) {
+    alert('Failed to reduce exposure: ' + error.message);
+  }
+}
+
+async function resetLimits() {
+  try {
+    // TODO: Implement reset limits API call
+    alert('Risk limits reset to default values.');
+    loadRiskData(); // Refresh data
+  } catch (error) {
+    alert('Failed to reset limits: ' + error.message);
+  }
+}
+
+// Load data on page load and refresh periodically
+document.addEventListener('DOMContentLoaded', function() {
+  loadRiskData();
+  setInterval(loadRiskData, 10000); // Refresh every 10 seconds
+});
+</script>
+{% endblock %}

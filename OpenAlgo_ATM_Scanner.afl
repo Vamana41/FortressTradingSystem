@@ -1,0 +1,74 @@
+// OpenAlgo ATM Scanner for Fortress Trading System
+// Automatically identifies ATM (At-The-Money) options for trading
+// Created: 2025-11-15
+
+_SECTION_BEGIN("OpenAlgo ATM Scanner");
+
+// Configuration
+OpenAlgoURL = "http://localhost:5000";
+APIKey = ParamStr("API Key", "89cd257b0bee93f6798130ca99d487a7641a994b567c7646a96775d6c1d425f0");
+Underlying = ParamStr("Underlying Symbol", "NIFTY");
+Exchange = ParamStr("Exchange", "NFO");
+ExpiryDate = ParamStr("Expiry Date", "");  // Format: DDMMMYY (e.g., 28NOV24)
+
+// ATM Calculation Parameters
+StrikeInterval = Param("Strike Interval", 50, 10, 500, 10);
+NumStrikes = Param("Number of Strikes", 10, 5, 50, 1);
+
+// Enable/disable features
+EnableAutoInjection = ParamToggle("Enable Auto Injection", "No|Yes", 1);
+EnableLogging = ParamToggle("Enable Logging", "No|Yes", 1);
+
+// Function to get current underlying price via OpenAlgo API
+function GetUnderlyingPrice(symbol, exchange) {
+    // This would call OpenAlgo API to get current price
+    // For now, return current close as approximation
+    return Close;
+}
+
+// Function to identify ATM strike
+function GetATMStrike(underlyingPrice, interval) {
+    return round(underlyingPrice / interval) * interval;
+}
+
+// Function to generate option symbols
+function GenerateOptionSymbols(underlying, expiry, atmStrike, numStrikes, interval) {
+    symbols = "";
+    
+    // Generate CE symbols
+    for (i = -numStrikes; i <= numStrikes; i++) {
+        strike = atmStrike + (i * interval);
+        ceSymbol = underlying + expiry + strike + "CE";
+        peSymbol = underlying + expiry + strike + "PE";
+        
+        symbols = symbols + ceSymbol + "," + peSymbol;
+        if (i < numStrikes) symbols = symbols + ",";
+    }
+    
+    return symbols;
+}
+
+// Main execution
+if (EnableAutoInjection) {
+    // Get current underlying price
+    currentPrice = GetUnderlyingPrice(Underlying, Exchange);
+    atmStrike = GetATMStrike(currentPrice, StrikeInterval);
+    
+    // Generate option symbols
+    optionSymbols = GenerateOptionSymbols(Underlying, ExpiryDate, atmStrike, NumStrikes, StrikeInterval);
+    
+    if (EnableLogging) {
+        printf("Current Price: %g\n", currentPrice);
+        printf("ATM Strike: %g\n", atmStrike);
+        printf("Option Symbols: %s\n", optionSymbols);
+    }
+    
+    Title = "OpenAlgo ATM Scanner - " + Underlying + " @ " + currentPrice + " (ATM: " + atmStrike + ")";
+} else {
+    Title = "OpenAlgo ATM Scanner (Disabled)";
+}
+
+// Display information
+PlotText("ATM Strike: " + atmStrike, BarCount-1, Close, colorWhite);
+
+_SECTION_END();

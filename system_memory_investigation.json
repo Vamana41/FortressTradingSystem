@@ -1,0 +1,184 @@
+{
+  "timestamp": "2025-11-16 09:19:17",
+  "system_memory": {
+    "total_gb": 15.405460357666016,
+    "used_gb": 13.701122283935547,
+    "available_gb": 1.7043380737304688,
+    "percent": 88.9,
+    "cached_gb": 0.0,
+    "buffers_gb": 0.0
+  },
+  "memory_hogs": [
+    {
+      "pid": 12732,
+      "name": "Trae.exe",
+      "memory_mb": 1716.8828125,
+      "memory_percent": 10.883435695238445,
+      "cpu_percent": 0.0,
+      "create_time": 1763233309.887263
+    },
+    {
+      "pid": 16840,
+      "name": "Trae.exe",
+      "memory_mb": 1574.2890625,
+      "memory_percent": 9.979524317380262,
+      "cpu_percent": 0.0,
+      "create_time": 1763233326.6928453
+    },
+    {
+      "pid": 19784,
+      "name": "Trae.exe",
+      "memory_mb": 1094.9453125,
+      "memory_percent": 6.940932026131814,
+      "cpu_percent": 0.0,
+      "create_time": 1763233294.6776216
+    }
+  ],
+  "python_processes": [
+    {
+      "pid": 4384,
+      "name": "python.exe",
+      "cmdline": "C:\\Users\\Admin\\Documents\\FortressTradingSystem\\.venv314\\Scripts\\python.exe app.py",
+      "memory_mb": 175.85546875,
+      "memory_percent": 1.1147596515394895
+    },
+    {
+      "pid": 4636,
+      "name": "python.exe",
+      "cmdline": "C:\\Users\\Admin\\Documents\\FortressTradingSystem\\.venv314\\Scripts\\python.exe app.py",
+      "memory_mb": 3.38671875,
+      "memory_percent": 0.0214686380835811
+    },
+    {
+      "pid": 8180,
+      "name": "python.exe",
+      "cmdline": "C:\\Users\\Admin\\Documents\\FortressTradingSystem\\.venv314\\Scripts\\python.exe performance_monitor.py",
+      "memory_mb": 25.9765625,
+      "memory_percent": 0.16466717791904764
+    },
+    {
+      "pid": 10040,
+      "name": "python.exe",
+      "cmdline": "C:\\Users\\Admin\\AppData\\Local\\uv\\cache\\archive-v0\\W74m9eT9lbjPjJFiuL1Tl\\Scripts\\python.exe C:\\Users\\Admin\\AppData\\Local\\uv\\cache\\archive-v0\\W74m9eT9lbjPjJFiuL1Tl\\Scripts\\mcp-server-fetch.exe",
+      "memory_mb": 68.54296875,
+      "memory_percent": 0.43449849187150813
+    },
+    {
+      "pid": 13976,
+      "name": "python.exe",
+      "cmdline": "C:\\Users\\Admin\\Documents\\FortressTradingSystem\\.venv314\\Scripts\\python.exe investigate_system_memory.py",
+      "memory_mb": 22.46484375,
+      "memory_percent": 0.14240615642292376
+    },
+    {
+      "pid": 14544,
+      "name": "python.exe",
+      "cmdline": "C:\\Users\\Admin\\AppData\\Local\\uv\\cache\\archive-v0\\W74m9eT9lbjPjJFiuL1Tl\\Scripts\\python.exe C:\\Users\\Admin\\AppData\\Local\\uv\\cache\\archive-v0\\W74m9eT9lbjPjJFiuL1Tl\\Scripts\\mcp-server-fetch.exe",
+      "memory_mb": 3.36328125,
+      "memory_percent": 0.021320066193729326
+    },
+    {
+      "pid": 14996,
+      "name": "python.exe",
+      "cmdline": "C:\\Users\\Admin\\Documents\\FortressTradingSystem\\.venv314\\Scripts\\python.exe investigate_system_memory.py",
+      "memory_mb": 3.37890625,
+      "memory_percent": 0.021419114120297175
+    },
+    {
+      "pid": 17888,
+      "name": "python.exe",
+      "cmdline": "C:\\Users\\Admin\\Documents\\FortressTradingSystem\\.venv314\\Scripts\\python.exe get_openalgo_api_key_from_web.py",
+      "memory_mb": 3.37890625,
+      "memory_percent": 0.021419114120297175
+    },
+    {
+      "pid": 20408,
+      "name": "python.exe",
+      "cmdline": "C:\\Users\\Admin\\Documents\\FortressTradingSystem\\.venv314\\Scripts\\python.exe get_openalgo_api_key_from_web.py",
+      "memory_mb": 31.2109375,
+      "memory_percent": 0.19784823331927678
+    },
+    {
+      "pid": 21348,
+      "name": "python.exe",
+      "cmdline": "C:\\Users\\Admin\\Documents\\FortressTradingSystem\\.venv314\\Scripts\\python.exe performance_monitor.py",
+      "memory_mb": 3.37890625,
+      "memory_percent": 0.021419114120297175
+    }
+  ],
+  "browser_processes": [
+    {
+      "pid": 4332,
+      "name": "msedge.exe",
+      "memory_mb": 179.109375
+    },
+    {
+      "pid": 10088,
+      "name": "chrome.exe",
+      "memory_mb": 172.30078125
+    },
+    {
+      "pid": 10132,
+      "name": "chrome.exe",
+      "memory_mb": 131.9453125
+    },
+    {
+      "pid": 11552,
+      "name": "chrome.exe",
+      "memory_mb": 98.19140625
+    },
+    {
+      "pid": 17508,
+      "name": "msedge.exe",
+      "memory_mb": 51.39453125
+    }
+  ],
+  "suspicious_processes": [
+    {
+      "pid": 12732,
+      "name": "Trae.exe",
+      "memory_mb": 1717.66796875,
+      "runtime_hours": 8.79090943409337,
+      "memory_per_hour": 195.39138488771698
+    },
+    {
+      "pid": 16840,
+      "name": "Trae.exe",
+      "memory_mb": 1574.71484375,
+      "runtime_hours": 8.786241628130277,
+      "memory_per_hour": 179.22507829836468
+    },
+    {
+      "pid": 19784,
+      "name": "Trae.exe",
+      "memory_mb": 1097.85546875,
+      "runtime_hours": 8.795134857826763,
+      "memory_per_hour": 124.82531382370126
+    }
+  ],
+  "service_processes": [
+    {
+      "pid": 4332,
+      "name": "msedge.exe",
+      "memory_mb": 179.109375,
+      "user": "DESKTOP-D40H9D6\\Admin"
+    },
+    {
+      "pid": 10088,
+      "name": "chrome.exe",
+      "memory_mb": 172.30078125,
+      "user": "DESKTOP-D40H9D6\\Admin"
+    },
+    {
+      "pid": 10132,
+      "name": "chrome.exe",
+      "memory_mb": 131.9453125,
+      "user": "DESKTOP-D40H9D6\\Admin"
+    }
+  ],
+  "recommendations": [
+    "\ud83d\udc37 Top 5 memory hogs use 4386MB - consider restarting them",
+    "\ud83d\udd27 Consider restarting the system to clear cached memory",
+    "\ud83d\udcbe Check for Windows updates that might need restart"
+  ]
+}

@@ -1,0 +1,57 @@
+{
+  "python_version": "3.14.0",
+  "optimizations_enabled": {
+    "asyncio_optimization": true,
+    "memory_allocation": true,
+    "string_interning": true,
+    "numba_compilation": true,
+    "rust_extensions": true,
+    "cython_acceleration": true,
+    "jit_compilation": true,
+    "parallel_processing": true,
+    "memory_pool": true,
+    "garbage_collection": true
+  },
+  "performance_settings": {
+    "asyncio_debug": false,
+    "gc_threshold": [
+      700,
+      10,
+      10
+    ],
+    "gc_generations": 3,
+    "memory_limit_mb": 4096,
+    "thread_pool_size": 20,
+    "process_pool_size": 16,
+    "cache_size": 1000,
+    "buffer_size": 8192,
+    "timeout_seconds": 30
+  },
+  "monitoring": {
+    "memory_profiling": true,
+    "cpu_profiling": true,
+    "latency_tracking": true,
+    "throughput_monitoring": true,
+    "benchmark_interval_seconds": 3600
+  },
+  "rust_extensions": {
+    "enabled": true,
+    "modules": [
+      "fortress_core",
+      "market_data_processor",
+      "order_matching_engine",
+      "risk_calculator",
+      "portfolio_optimizer"
+    ],
+    "optimization_level": 3,
+    "lto_enabled": true,
+    "simd_enabled": true
+  },
+  "numba_settings": {
+    "nopython": true,
+    "parallel": true,
+    "fastmath": true,
+    "cache": true,
+    "target_backend": "cpu"
+  }
+}

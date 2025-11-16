@@ -1,0 +1,413 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row g-3">
+  <div class="col-12">
+    <h4 class="text-light">Multi-Timeframe Analysis</h4>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-md-4">
+    <div class="card bg-secondary text-light">
+      <div class="card-body">
+        <h6 class="card-title">Symbol & Strategy Selection</h6>
+        <div class="mb-3">
+          <label for="symbolSelect" class="form-label">Symbol:</label>
+          <select id="symbolSelect" class="form-select bg-dark text-light">
+            <option value="">Select Symbol</option>
+            <option value="NIFTY">NIFTY</option>
+            <option value="BANKNIFTY">BANKNIFTY</option>
+            <option value="FINNIFTY">FINNIFTY</option>
+            <option value="SENSEX">SENSEX</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label for="strategySelect" class="form-label">Strategy:</label>
+          <select id="strategySelect" class="form-select bg-dark text-light">
+            <option value="">Select Strategy</option>
+            <option value="momentum">Momentum</option>
+            <option value="mean_reversion">Mean Reversion</option>
+            <option value="breakout">Breakout</option>
+            <option value="trend_following">Trend Following</option>
+          </select>
+        </div>
+        <button class="btn btn-primary" onclick="loadTimeframeAnalysis()">Analyze</button>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-8">
+    <div class="card bg-secondary text-light">
+      <div class="card-body">
+        <h6 class="card-title">Signal Correlation Analysis</h6>
+        <div id="correlationResult">
+          <div class="text-muted">Select symbol and strategy to view correlation analysis</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mt-1">
+  <div class="col-md-12">
+    <div class="card bg-secondary text-light">
+      <div class="card-body">
+        <h6 class="card-title">Multi-Timeframe Signals</h6>
+        <div id="timeframeSignals">
+          <div class="text-muted">No signals to display</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mt-1">
+  <div class="col-md-6">
+    <div class="card bg-secondary text-light">
+      <div class="card-body">
+        <h6 class="card-title">Timeframe Performance</h6>
+        <canvas id="timeframePerformanceChart" height="200"></canvas>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card bg-secondary text-light">
+      <div class="card-body">
+        <h6 class="card-title">Signal Strength Distribution</h6>
+        <canvas id="signalStrengthChart" height="200"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mt-1">
+  <div class="col-md-12">
+    <div class="card bg-secondary text-light">
+      <div class="card-body">
+        <h6 class="card-title">Historical Signal Analysis</h6>
+        <canvas id="historicalSignalsChart" height="300"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let timeframePerformanceChart, signalStrengthChart, historicalSignalsChart;
+
+async function loadTimeframeAnalysis() {
+  const symbol = document.getElementById('symbolSelect').value;
+  const strategy = document.getElementById('strategySelect').value;
+  
+  if (!symbol || !strategy) {
+    alert('Please select both symbol and strategy');
+    return;
+  }
+  
+  try {
+    // Load correlation analysis
+    const correlationResponse = await fetch(`/api/timeframes/${symbol}/${strategy}`);
+    const correlationData = await correlationResponse.json();
+    updateCorrelationAnalysis(correlationData);
+    
+    // Load recent signals
+    const signalsResponse = await fetch(`/api/signals?symbol=${symbol}&strategy=${strategy}&limit=50`);
+    const signalsData = await signalsResponse.json();
+    updateTimeframeSignals(signalsData.signals);
+    
+    // Update charts
+    updatePerformanceCharts(signalsData.signals, correlationData);
+    
+  } catch (error) {
+    console.error('Failed to load timeframe analysis:', error);
+    document.getElementById('correlationResult').innerHTML = '<div class="text-danger">Failed to load analysis</div>';
+  }
+}
+
+function updateCorrelationAnalysis(data) {
+  const container = document.getElementById('correlationResult');
+  if (data.error) {
+    container.innerHTML = `<div class="text-danger">${data.error}</div>`;
+    return;
+  }
+  
+  if (!data.correlation_type) {
+    container.innerHTML = '<div class="text-muted">No correlation data available</div>';
+    return;
+  }
+  
+  const correlationText = data.correlation_type.replace('_', ' ').toUpperCase();
+  const correlationColor = data.correlation_score > 0.7 ? 'success' : 
+                          data.correlation_score < -0.7 ? 'danger' : 'warning';
+  
+  container.innerHTML = `
+    <div class="row">
+      <div class="col-md-6">
+        <div class="mb-2">
+          <small>Correlation Type:</small>
+          <div class="fw-bold text-${correlationColor}">${correlationText}</div>
+        </div>
+        <div class="mb-2">
+          <small>Correlation Score:</small>
+          <div class="fw-bold">${(data.correlation_score * 100).toFixed(1)}%</div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="mb-2">
+          <small>Primary Timeframe:</small>
+          <div class="fw-bold">${data.primary_timeframe || 'N/A'}</div>
+        </div>
+        <div class="mb-2">
+          <small>Secondary Timeframes:</small>
+          <div class="fw-bold">${data.secondary_timeframes?.length || 0}</div>
+        </div>
+      </div>
+    </div>
+    <div class="mt-3">
+      <small>Analysis:</small>
+      <div class="text-light">${getCorrelationAnalysisText(data)}</div>
+    </div>
+  `;
+}
+
+function getCorrelationAnalysisText(data) {
+  const score = Math.abs(data.correlation_score);
+  const type = data.correlation_type;
+  
+  if (score > 0.8) {
+    return type.includes('CONFLUENCE') ? 
+      'Strong confluence detected across timeframes. High probability setup.' :
+      'Strong divergence detected. Potential reversal opportunity.';
+  } else if (score > 0.6) {
+    return 'Moderate correlation across timeframes. Caution advised.';
+  } else {
+    return 'Low correlation. Mixed signals across timeframes.';
+  }
+}
+
+function updateTimeframeSignals(signals) {
+  const container = document.getElementById('timeframeSignals');
+  if (!signals || signals.length === 0) {
+    container.innerHTML = '<div class="text-muted">No signals available</div>';
+    return;
+  }
+  
+  let html = '<div class="row">';
+  const timeframeGroups = {};
+  
+  // Group signals by timeframe
+  signals.forEach(signal => {
+    const tf = signal.timeframe || 'unknown';
+    if (!timeframeGroups[tf]) timeframeGroups[tf] = [];
+    timeframeGroups[tf].push(signal);
+  });
+  
+  // Create cards for each timeframe
+  Object.entries(timeframeGroups).forEach(([timeframe, timeframeSignals]) => {
+    const latestSignal = timeframeSignals[0]; // Most recent
+    const signalType = latestSignal.final_signal?.signal_type || 'unknown';
+    const strength = latestSignal.final_signal?.strength || 0;
+    
+    html += `
+      <div class="col-md-3 mb-3">
+        <div class="card bg-dark">
+          <div class="card-body">
+            <h6 class="card-title text-light">${timeframe}</h6>
+            <div class="mb-2">
+              <span class="badge ${getSignalBadgeClass(signalType)}">${signalType.toUpperCase()}</span>
+            </div>
+            <div class="mb-2">
+              <small>Strength: ${(strength * 100).toFixed(0)}%</small>
+            </div>
+            <div class="mb-2">
+              <small>Quantity: ${latestSignal.final_signal?.quantity || 0}</small>
+            </div>
+            <div>
+              <small class="text-muted">${new Date(latestSignal.timestamp).toLocaleTimeString()}</small>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  });
+  
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function getSignalBadgeClass(signalType) {
+  switch (signalType.toLowerCase()) {
+    case 'buy':
+    case 'bullish':
+      return 'bg-success';
+    case 'sell':
+    case 'bearish':
+      return 'bg-danger';
+    case 'hold':
+    case 'neutral':
+      return 'bg-secondary';
+    default:
+      return 'bg-info';
+  }
+}
+
+function updatePerformanceCharts(signals, correlationData) {
+  // Update timeframe performance chart
+  const performanceCtx = document.getElementById('timeframePerformanceChart');
+  if (performanceCtx && signals.length > 0) {
+    if (timeframePerformanceChart) {
+      timeframePerformanceChart.destroy();
+    }
+    
+    const timeframeData = {};
+    signals.forEach(signal => {
+      const tf = signal.timeframe || 'unknown';
+      if (!timeframeData[tf]) timeframeData[tf] = { wins: 0, total: 0 };
+      timeframeData[tf].total++;
+      // Simple win calculation based on signal strength
+      if (signal.final_signal?.strength > 0.6) timeframeData[tf].wins++;
+    });
+    
+    const labels = Object.keys(timeframeData);
+    const winRates = labels.map(tf => (timeframeData[tf].wins / timeframeData[tf].total) * 100);
+    
+    timeframePerformanceChart = new Chart(performanceCtx, {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'Win Rate (%)',
+          data: winRates,
+          backgroundColor: 'rgba(75, 192, 192, 0.8)'
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: {
+            beginAtZero: true,
+            max: 100
+          }
+        }
+      }
+    });
+  }
+  
+  // Update signal strength distribution chart
+  const strengthCtx = document.getElementById('signalStrengthChart');
+  if (strengthCtx && signals.length > 0) {
+    if (signalStrengthChart) {
+      signalStrengthChart.destroy();
+    }
+    
+    const strengthRanges = {
+      'Weak (0-40%)': 0,
+      'Medium (40-70%)': 0,
+      'Strong (70-100%)': 0
+    };
+    
+    signals.forEach(signal => {
+      const strength = (signal.final_signal?.strength || 0) * 100;
+      if (strength <= 40) strengthRanges['Weak (0-40%)']++;
+      else if (strength <= 70) strengthRanges['Medium (40-70%)']++;
+      else strengthRanges['Strong (70-100%)']++;
+    });
+    
+    signalStrengthChart = new Chart(strengthCtx, {
+      type: 'doughnut',
+      data: {
+        labels: Object.keys(strengthRanges),
+        datasets: [{
+          data: Object.values(strengthRanges),
+          backgroundColor: [
+            'rgba(255, 99, 132, 0.8)',
+            'rgba(255, 205, 86, 0.8)',
+            'rgba(75, 192, 192, 0.8)'
+          ]
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false
+      }
+    });
+  }
+  
+  // Update historical signals chart
+  const historicalCtx = document.getElementById('historicalSignalsChart');
+  if (historicalCtx && signals.length > 0) {
+    if (historicalSignalsChart) {
+      historicalSignalsChart.destroy();
+    }
+    
+    // Group signals by date
+    const dailySignals = {};
+    signals.forEach(signal => {
+      const date = new Date(signal.timestamp).toLocaleDateString();
+      if (!dailySignals[date]) dailySignals[date] = { buy: 0, sell: 0, total: 0 };
+      
+      const signalType = signal.final_signal?.signal_type?.toLowerCase();
+      if (signalType === 'buy') dailySignals[date].buy++;
+      else if (signalType === 'sell') dailySignals[date].sell++;
+      dailySignals[date].total++;
+    });
+    
+    const dates = Object.keys(dailySignals).sort();
+    const buyCounts = dates.map(date => dailySignals[date].buy);
+    const sellCounts = dates.map(date => dailySignals[date].sell);
+    
+    historicalSignalsChart = new Chart(historicalCtx, {
+      type: 'line',
+      data: {
+        labels: dates,
+        datasets: [
+          {
+            label: 'Buy Signals',
+            data: buyCounts,
+            borderColor: 'rgba(75, 192, 192, 1)',
+            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+            tension: 0.2
+          },
+          {
+            label: 'Sell Signals',
+            data: sellCounts,
+            borderColor: 'rgba(255, 99, 132, 1)',
+            backgroundColor: 'rgba(255, 99, 132, 0.2)',
+            tension: 0.2
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: {
+            beginAtZero: true
+          }
+        }
+      }
+    });
+  }
+}
+
+// Load available symbols and strategies on page load
+document.addEventListener('DOMContentLoaded', function() {
+  // Populate symbol and strategy selects with actual data
+  // This could be enhanced to load from API
+  
+  // Set up event listeners
+  document.getElementById('symbolSelect').addEventListener('change', function() {
+    if (this.value && document.getElementById('strategySelect').value) {
+      loadTimeframeAnalysis();
+    }
+  });
+  
+  document.getElementById('strategySelect').addEventListener('change', function() {
+    if (this.value && document.getElementById('symbolSelect').value) {
+      loadTimeframeAnalysis();
+    }
+  });
+});
+</script>
+{% endblock %}

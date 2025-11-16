@@ -1,0 +1,6 @@
+Windows Registry Editor Version 5.00
+
+[HKEY_CURRENT_USER\Software\OpenAlgoRelay]
+"Server"="127.0.0.1"
+"Port"=dword:0000223a
+"ApiKey"="259af85739164007c25ffd2b136acfa5b8d3fea95e17f9f8b897155e6c6be17b"

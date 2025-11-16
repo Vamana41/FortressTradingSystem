@@ -1,0 +1,118 @@
+{
+  "benchmark_id": "fortress_benchmark_20251116_082031",
+  "start_time": "2025-11-16T08:20:16.165221",
+  "end_time": "2025-11-16T08:20:31.937517",
+  "duration_minutes": 0.26287160000000004,
+  "performance_score": 84.6,
+  "benchmarks": {
+    "system_info": {
+      "timestamp": "2025-11-16T08:20:16.189891",
+      "cpu": {
+        "physical_cores": 8,
+        "logical_cores": 16,
+        "max_frequency_mhz": 3201.0,
+        "current_frequency_mhz": 3201.0
+      },
+      "memory": {
+        "total_gb": 15.405460357666016,
+        "available_gb": 0.8390388488769531,
+        "percent_used": 94.6
+      },
+      "disk": {
+        "C:\\": {
+          "total_gb": 327.7699966430664,
+          "free_gb": 80.62288284301758,
+          "percent_used": 75.4
+        },
+        "D:\\": {
+          "total_gb": 53.59284591674805,
+          "free_gb": 26.55661392211914,
+          "percent_used": 50.4
+        },
+        "M:\\": {
+          "total_gb": 94.66989517211914,
+          "free_gb": 33.533935546875,
+          "percent_used": 64.6
+        }
+      },
+      "python": {
+        "version": "3.14.0 (tags/v3.14.0:ebf955d, Oct  7 2025, 10:15:03) [MSC v.1944 64 bit (AMD64)]",
+        "executable": "C:\\Users\\Admin\\Documents\\FortressTradingSystem\\.venv314\\Scripts\\python.exe",
+        "path": [
+          "C:\\Users\\Admin\\Documents\\FortressTradingSystem",
+          "C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python314\\python314.zip",
+          "C:\\Users\\Admin\\AppData\\Local\\Programs\\Python\\Python314\\DLLs"
+        ]
+      }
+    },
+    "cpu_performance": {
+      "duration_seconds": 10,
+      "average_cpu_percent": 1.3148936170212766,
+      "max_cpu_percent": 23.1,
+      "min_cpu_percent": 0.0,
+      "samples": 47
+    },
+    "memory_performance": {
+      "test_size_mb": 100,
+      "allocation_time_seconds": 0.027060747146606445,
+      "memory_before_mb": 14929.08203125,
+      "memory_after_allocation_mb": 15030.34375,
+      "memory_after_cleanup_mb": 14933.44921875,
+      "memory_increase_mb": 101.26171875
+    },
+    "disk_performance": {
+      "test_file_size_mb": 50,
+      "write_time_seconds": 0.03753209114074707,
+      "read_time_seconds": 0.015982866287231445,
+      "write_speed_mbps": 1332.1932906029056,
+      "read_speed_mbps": 3128.350015662992,
+      "data_integrity_valid": true
+    },
+    "python_performance": {
+      "json_operations_time_seconds": 0.2186727523803711,
+      "list_operations_time_seconds": 0.03351402282714844,
+      "string_operations_time_seconds": 0.03805232048034668,
+      "operations_per_second": {
+        "json": 914.6086918598312,
+        "list": 89514.76865289397,
+        "string": 788388.1881919513
+      }
+    },
+    "network_performance": {
+      "http://localhost:5000/api/v1/ping": {
+        "response_time_seconds": 1.019319772720337,
+        "status_code": 404,
+        "success": false
+      },
+      "http://httpbin.org/delay/1": {
+        "response_time_seconds": 2.0570178031921387,
+        "status_code": 200,
+        "success": true
+      }
+    },
+    "fortress_specific": {
+      "openalgo_ping": {
+        "response_time_seconds": 1.01173996925354,
+        "status_code": 404,
+        "available": false
+      },
+      "config_files": {
+        "rtd_ws_config.json": {
+          "load_time_seconds": 0.00012731552124023438,
+          "file_size_kb": 1.650390625,
+          "valid_json": true
+        },
+        "upgrade_config.json": {
+          "load_time_seconds": 8.749961853027344e-05,
+          "file_size_kb": 0.8115234375,
+          "valid_json": true
+        },
+        "memory_optimization_config.json": {
+          "load_time_seconds": 0.00016236305236816406,
+          "file_size_kb": 0.6201171875,
+          "valid_json": true
+        }
+      }
+    }
+  }
+}

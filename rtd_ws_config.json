@@ -1,0 +1,40 @@
+{
+  "fyers": {
+    "app_id": "YOUR_BROKER_MARKET_API_KEY",
+    "secret_key": "YOUR_BROKER_MARKET_API_SECRET",
+    "redirect_uri": "http://127.0.0.1:5000/fyers/callback'  # Change if different",
+    "auth_code": "YOUR_FYERS_AUTH_CODE",
+    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOlsiZDoxIiwiZDoyIiwieDowIiwieDoxIiwieDoyIl0sImF0X2hhc2giOiJnQUFBQUFCcEdMalV1aDd6STBBbzVURHFuZXBVVEdORE9oMW5zLWNHeWRUUHZmRjhXZHNmb2xpR0FDX01jbXdiRVozUllRUFF1d2tQcmtrSGRrQUlkV05kYW9YMkxkTGx0LWtndjl2dmlZRXJRZVpqeURrVkFncz0iLCJkaXNwbGF5X25hbWUiOiIiLCJvbXMiOiJLMSIsImhzbV9rZXkiOiI3YzNkZDFhMmQ1MTU0OWQ3Nzk0MDUyYWU4YjQyMjFjMTczMTE4OWFmZDU0MzhhZWFiYmRjZDNkYSIsImlzRGRwaUVuYWJsZWQiOiJOIiwiaXNNdGZFbmFibGVkIjoiTiIsImZ5X2lkIjoiWVIxNzYxMSIsImFwcFR5cGUiOjEwMCwiZXhwIjoxNzYzMjUzMDAwLCJpYXQiOjE3NjMyMjc4NjAsImlzcyI6ImFwaS5meWVycy5pbiIsIm5iZiI6MTc2MzIyNzg2MCwic3ViIjoiYWNjZXNzX3Rva2VuIn0.6_pDwns7ihWAolVyz1Tz8jgY83eB2N9hKpL_7qC0TzQ"
+  },
+  "relay_server": {
+    "port": 10102,
+    "use_fake_data": false,
+    "max_size": 16777216
+  },
+  "fortress": {
+    "redis_url": "redis://localhost:6379",
+    "event_bus_port": 6379,
+    "dashboard_port": 8000
+  },
+  "paths": {
+    "fyers_log_path": "C:\\AmiPyScripts\\fyers_logs",
+    "amibroker_plugin_path": "C:\\Program Files\\AmiBroker\\Plugins",
+    "atm_data_path": "C:\\AmiPyScripts\\atm_data"
+  },
+  "atm_scanner": {
+    "enabled": true,
+    "update_interval": 300,
+    "symbols": [
+      "NIFTY",
+      "BANKNIFTY",
+      "FINNIFTY"
+    ],
+    "expiry_selection": "weekly"
+  },
+  "integration": {
+    "auto_start": true,
+    "monitor_interval": 30,
+    "max_restart_attempts": 3,
+    "health_check_interval": 60
+  }
+}

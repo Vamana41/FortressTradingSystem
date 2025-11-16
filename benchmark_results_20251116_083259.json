@@ -1,0 +1,89 @@
+{
+  "system_info": {
+    "cpu": {
+      "physical_cores": 8,
+      "logical_cores": 16,
+      "cpu_freq": {
+        "current": 3201.0,
+        "min": 0.0,
+        "max": 3201.0
+      },
+      "cpu_percent": 9.5
+    },
+    "memory": {
+      "total": 16541487104,
+      "available": 764596224,
+      "percent": 95.4,
+      "used": 15776890880,
+      "free": 764596224
+    },
+    "disk": {
+      "C:\\": {
+        "total": 351940354048,
+        "used": 266131222528,
+        "free": 85809131520,
+        "percent": 75.6
+      },
+      "D:\\": {
+        "total": 57544880128,
+        "used": 29029933056,
+        "free": 28514947072,
+        "percent": 50.4
+      },
+      "M:\\": {
+        "total": 101651025920,
+        "used": 65644236800,
+        "free": 36006789120,
+        "percent": 64.6
+      }
+    },
+    "python_version": "3.14.0 (tags/v3.14.0:ebf955d, Oct  7 2025, 10:15:03) [MSC v.1944 64 bit (AMD64)]",
+    "platform": "win32",
+    "timestamp": "2025-11-16T08:32:59.056596"
+  },
+  "benchmarks": {
+    "numpy_operations": {
+      "total_time": 0.3191654682159424,
+      "operations": {
+        "moving_average_20": 0.03086543083190918,
+        "rsi_calculation": 0.11350035667419434,
+        "standard_deviation_20": 0.03222060203552246,
+        "bollinger_bands": 0.06322884559631348,
+        "volume_analysis": 0.030775070190429688
+      },
+      "operations_per_second": 15.665855168946655,
+      "data_size": 1000000,
+      "memory_usage_mb": 7.6295013427734375
+    },
+    "data_serialization": {
+      "methods": {
+        "json": 0.09520149230957031,
+        "orjson": 0.015913009643554688,
+        "ujson": 0.04877138137817383,
+        "msgpack": 0.02498483657836914
+      },
+      "sample_size": 10000,
+      "best_method": "orjson"
+    },
+    "async_operations": {
+      "total_time": 0.0034754276275634766,
+      "tasks_per_second": 28773.437607189408,
+      "tasks_completed": 100
+    },
+    "memory_usage": {
+      "initial_memory_mb": 82.5625,
+      "peak_memory_mb": 101.13671875,
+      "final_memory_mb": 101.13671875,
+      "memory_increase_mb": 18.57421875,
+      "memory_released_mb": 0.0,
+      "total_time": 0.08264923095703125,
+      "data_size": 100000
+    },
+    "performance_wrappers": {
+      "error": "Performance wrappers not available"
+    }
+  },
+  "overall_performance_score": 67.18886183896488,
+  "benchmark_duration": "0:00:00.700509",
+  "timestamp": "2025-11-16T08:32:59.757749"
+}

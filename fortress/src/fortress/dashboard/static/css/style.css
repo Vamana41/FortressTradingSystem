@@ -1,0 +1,63 @@
+:root{--bg:#0f0f12;--fg:#e8e8e8;--muted:#9aa0a6;--primary:#4bd;--success:#28a745;--danger:#dc3545;--warning:#ffc107}
+body{background-color:var(--bg);color:var(--fg);font-family:'Segoe UI',system-ui,-apple-system,sans-serif}
+.card{background-color:#2b2f33;border:1px solid #3a3f44;box-shadow:0 2px 4px rgba(0,0,0,.2)}
+.card-title{margin:0 0 .5rem 0;color:var(--fg);font-weight:600}
+.table td,.table th{padding:.5rem;border-color:#3a3f44}
+.table-dark{--bs-table-bg:#2b2f33;--bs-table-border-color:#3a3f44}
+.list-group-item{background:#2b2f33;color:var(--fg);border-color:#3a3f44}
+.list-group-item:hover{background:#3a3f44}
+.navbar-brand{font-weight:700;color:var(--primary)!important}
+.nav-link{color:var(--muted)!important;transition:color .2s ease}
+.nav-link:hover,.nav-link.active{color:var(--fg)!important}
+.btn-primary{background-color:var(--primary);border-color:var(--primary)}
+.btn-primary:hover{background-color:#3a9fd9;border-color:#3a9fd9}
+.form-control,.form-select{background-color:#1a1d20;border-color:#3a3f44;color:var(--fg)}
+.form-control:focus,.form-select:focus{background-color:#1a1d20;border-color:var(--primary);color:var(--fg);box-shadow:0 0 0 .25rem rgba(74,187,221,.25)}
+.badge{font-size:.75em;font-weight:500}
+.alert{background-color:#2b2f33;border-color:#3a3f44;color:var(--fg)}
+.alert-success{border-color:var(--success);background-color:rgba(40,167,69,.1)}
+.alert-danger{border-color:var(--danger);background-color:rgba(220,53,69,.1)}
+.alert-warning{border-color:var(--warning);background-color:rgba(255,193,7,.1)}
+.text-muted{color:var(--muted)!important}
+.fw-bold{font-weight:600!important}
+.bg-success{background-color:var(--success)!important}
+.bg-danger{background-color:var(--danger)!important}
+.bg-warning{background-color:var(--warning)!important}
+.bg-info{background-color:#17a2b8!important}
+.bg-primary{background-color:var(--primary)!important}
+.bg-secondary{background-color:#2b2f33!important}
+.text-success{color:var(--success)!important}
+.text-danger{color:var(--danger)!important}
+.text-warning{color:var(--warning)!important}
+.text-info{color:#17a2b8!important}
+.text-primary{color:var(--primary)!important}
+.chart-container{position:relative;height:200px;margin-bottom:1rem}
+.dashboard-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1rem}
+.metric-card{text-align:center;padding:1rem;border-radius:.5rem;background:#2b2f33;border:1px solid #3a3f44}
+.metric-value{font-size:1.5rem;font-weight:700;margin-bottom:.25rem}
+.metric-label{font-size:.875rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.status-indicator{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:.5rem}
+.status-online{background-color:var(--success)}
+.status-offline{background-color:var(--danger)}
+.status-warning{background-color:var(--warning)}
+.loading-spinner{border:2px solid #3a3f44;border-top:2px solid var(--primary);border-radius:50%;width:20px;height:20px;animation:spin 1s linear infinite}
+@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+.fade-in{animation:fadeIn .5s ease-in}
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.table-responsive{border-radius:.5rem;overflow:hidden}
+.btn-group-sm>.btn,.btn-sm{padding:.25rem .5rem;font-size:.875rem}
+.card-header{background-color:#3a3f44;border-bottom:1px solid #4a5056;padding:.75rem 1rem;font-weight:600}
+.dropdown-menu{background-color:#2b2f33;border:1px solid #3a3f44}
+.dropdown-item{color:var(--fg);padding:.5rem 1rem}
+.dropdown-item:hover{background-color:#3a3f44;color:var(--fg)}
+.dropdown-item.active,.dropdown-item:active{background-color:var(--primary);color:#fff}
+.modal-content{background-color:#2b2f33;border:1px solid #3a3f44;color:var(--fg)}
+.modal-header{border-bottom:1px solid #3a3f44}
+.modal-footer{border-top:1px solid #3a3f44}
+.toast{background-color:#3a3f44;border:1px solid #4a5056;color:var(--fg)}
+.progress{background-color:#1a1d20}
+@media (max-width:768px){.dashboard-grid{grid-template-columns:1fr}.metric-value{font-size:1.25rem}}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-track{background:#1a1d20}
+::-webkit-scrollbar-thumb{background:#3a3f44;border-radius:4px}
+::-webkit-scrollbar-thumb:hover{background:#4a5056}

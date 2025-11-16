@@ -1,0 +1,427 @@
+# ===================================================================================
+# ==  OpenAlgo+ Fortress: The Definitive Trade Server (v3 - Execution Manager)     ==
+# ===================================================================================
+#
+# This is the master trade execution server, built to be robust and fault-tolerant.
+#
+# Modifications:
+#   - Synchronizes funds and open positions with the broker on startup.
+#   - Uses a lock to process only one trade signal at a time, preventing race conditions.
+#   - Implements a new "Execution Manager" for all trades.
+#   - Slices large orders into chunks compliant with SEBI regulations (max 9 lots).
+#   - Implements an "All-or-Nothing" strategy: If any part of a trade fails or is
+#     partially filled, the entire trade is aborted, and any acquired shares are
+#     immediately sold to return to a flat position.
+#   - Updates internal state only after receiving definitive confirmation from the
+#     broker's order book, ensuring state accuracy.
+#
+# ===================================================================================
+
+import uvicorn
+import logging
+import os
+import math
+import asyncio
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fyers_apiv3 import fyersModel
+from dotenv import load_dotenv
+from contextlib import asynccontextmanager
+
+# --- Load Credentials & Enhanced Configuration ---
+load_dotenv()
+# --- START OF DIAGNOSTIC CODE ---
+print("="*60)
+print(f"DEBUG: Reading FYERS_API_BASE_URL = {os.getenv('FYERS_API_BASE_URL')}")
+print("="*60)
+# --- END OF DIAGNOSTIC CODE ---
+logging.basicConfig(level=logging.INFO, filename='trade_server.log', filemode='a',
+                    format='%(asctime)s - TRADE_SERVER - %(levelname)s - %(message)s')
+
+# --- Monkey Patch for Sandbox ---
+# This code checks for a custom API URL in your .env file.
+FYERS_API_BASE_URL = os.getenv("FYERS_API_BASE_URL")
+if FYERS_API_BASE_URL and "fyers.in" not in FYERS_API_BASE_URL:
+    logging.warning("="*60)
+    logging.warning(f"!!! DETECTED CUSTOM API URL: {FYERS_API_BASE_URL} !!!")
+    logging.warning("!!! SERVER IS RUNNING IN SANDBOX MODE. NOT LIVE TRADING. !!!")
+    fyersModel.base_url = FYERS_API_BASE_URL.rstrip('/') + "/v3/"
+    logging.warning(f"Fyers library base URL patched to: {fyersModel.base_url}")
+    logging.warning("="*60)
+# --- End of Monkey Patch ---
+
+
+
+# --- Global State Management & Concurrency Lock ---
+fyers_api_client = None
+ACTIVE_POSITIONS = {}  # e.g., {"NSE:NIFTY24JUL23000CE": {"qty": 50, "entry_price": 120.5}}
+AVAILABLE_MARGIN = 0
+trade_lock = asyncio.Lock() # Ensures only one signal is processed at a tim
+SYMBOL_DETAILS_CACHE = {}
+
+
+
+
+
+# --- Fyers API & Trading Logic Configuration ---
+FYERS_APP_ID = os.getenv("FYERS_APP_ID")
+FYERS_SECRET_KEY = os.getenv("FYERS_SECRET_KEY")
+FYERS_REDIRECT_URI = os.getenv("FYERS_REDIRECT_URI")
+FYERS_AUTH_CODE = os.getenv("FYERS_AUTH_CODE")
+
+# --- YOUR TRADING RULES & EXECUTION CONSTANTS ---
+CAPITAL_ALLOCATION_PERCENT = 0.50  # Use 50% of available funds
+NIFTY_LOT_SIZE = 75
+BANKNIFTY_LOT_SIZE = 30
+MAX_LOTS_PER_ORDER = 9             # The SEBI regulatory limit per order
+DELAY_BETWEEN_SLICES_SEC = 1.1     # Use slightly over 1s for safety
+
+
+
+## @app.on_event("startup")
+# In trade_server.py
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    The new 'lifespan' event manager for startup and shutdown logic.
+    """
+    global fyers_api_client, AVAILABLE_MARGIN, ACTIVE_POSITIONS
+    logging.info("Initializing Fyers API client on startup...")
+    if not all([FYERS_APP_ID, FYERS_SECRET_KEY, FYERS_AUTH_CODE]):
+        logging.critical("Cannot start: Fyers credentials missing in .env file.")
+        yield # Must yield control back to the application
+        return # Exit if credentials are not found
+
+    session = fyersModel.SessionModel(client_id=FYERS_APP_ID, secret_key=FYERS_SECRET_KEY, redirect_uri=FYERS_REDIRECT_URI, response_type="code", grant_type="authorization_code")
+    session.set_token(FYERS_AUTH_CODE)
+    
+    try:
+        response = session.generate_token()
+        if response.get("s") == "ok":
+            access_token = response["access_token"]
+            fyers_api_client = fyersModel.FyersModel(client_id=FYERS_APP_ID, token=access_token, log_path=os.getcwd())
+            logging.info(">>> Fyers API client initialized successfully. <<<")
+
+            # --- CRITICAL: STATE SYNCHRONIZATION WITH BROKER ---
+            logging.info("Attempting to synchronize funds from Fyers...")
+            funds_response = fyers_api_client.get_funds()
+            if funds_response.get("s") == "ok":
+                cash_details = next((item for item in funds_response['fund_limit'] if item['id'] == 10), None)
+                if cash_details:
+                    AVAILABLE_MARGIN = cash_details['equityAmount']
+                    logging.info(f"SUCCESS: Synchronized available margin: {AVAILABLE_MARGIN:.2f}")
+            else:
+                logging.error(f"Could not synchronize funds: {funds_response.get('message')}")
+                AVAILABLE_MARGIN = 0
+
+            logging.info("Attempting to synchronize open positions from Fyers...")
+            positions_response = fyers_api_client.get_positions()
+            if positions_response.get("s") == "ok":
+                ACTIVE_POSITIONS.clear()
+                open_positions = positions_response.get('netPositions', [])
+                for pos in open_positions:
+                    if pos['netQty'] != 0 and pos['productType'] == 'INTRADAY':
+                        symbol, qty, avg_price = pos['symbol'], abs(pos['netQty']), pos.get('avgPrice', 0)
+                        ACTIVE_POSITIONS[symbol] = {"qty": qty, "entry_price": avg_price}
+                        logging.warning(f"Synchronized open position: {symbol}, Qty: {qty}, Avg Price: {avg_price}")
+                logging.info(f"SUCCESS: Synchronized state. Found {len(ACTIVE_POSITIONS)} open intraday positions.")
+            else:
+                logging.critical(f"Could not synchronize open positions: {positions_response.get('message')}. Starting clean, which is DANGEROUS.")
+                ACTIVE_POSITIONS.clear()
+        else:
+            logging.critical(f"Fyers login failed: {response.get('message')}")
+    except Exception as e:
+        logging.critical(f"Exception during Fyers login and synchronization: {e}", exc_info=True)
+
+    # --- Lifespan Part 1: Startup complete ---
+    yield
+    # --- Lifespan Part 2: Shutdown logic (if any) would go here ---
+    logging.info("Server is shutting down.")
+
+
+
+# Initialize the FastAPI app with the new lifespan manager
+app = FastAPI(lifespan=lifespan)
+# --- Enable CORS for any potential future UI ---
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+
+
+
+
+# In trade_server.py
+
+async def get_lot_size_for_symbol(symbol: str) -> int:
+    """
+    Dynamically fetches the lot size for a given symbol from the Fyers API,
+    with in-memory caching to avoid repeated API calls.
+    """
+    # 1. Check our cache first for instant retrieval
+    if symbol in SYMBOL_DETAILS_CACHE:
+        logging.info(f"[Cache HIT] Found lot size for {symbol} in cache.")
+        return SYMBOL_DETAILS_CACHE[symbol]
+
+    # 2. If not in cache, make an API call
+    logging.warning(f"[Cache MISS] Fetching details for {symbol} from Fyers API...")
+    try:
+        data = {"symbols": symbol}
+        # The get_symbol_details endpoint is not standard in the library, 
+        # but we can use the 'quotes' endpoint which contains the lot size.
+        quote_response = fyers_api_client.quotes(data=data)
+        
+        if quote_response.get("s") == "ok" and quote_response.get("d"):
+            symbol_data = quote_response["d"][0].get("v")
+            if symbol_data and 'lot_size' in symbol_data:
+                lot_size = int(symbol_data['lot_size'])
+                logging.info(f"SUCCESS: Fetched lot size for {symbol}: {lot_size}")
+                # 3. Store the result in the cache for next time
+                SYMBOL_DETAILS_CACHE[symbol] = lot_size
+                return lot_size
+        
+        logging.error(f"Could not find lot size for {symbol} in Fyers response: {quote_response}")
+        return None # Indicate failure
+    except Exception as e:
+        logging.error(f"Exception fetching symbol details for {symbol}: {e}", exc_info=True)
+        return None # Indicate failure
+
+
+
+
+
+
+
+
+
+
+
+
+async def check_slice_status(order_id: str, expected_qty: int) -> tuple:
+    """
+    Checks the status of a single order slice by polling the order book.
+    Returns a tuple: (status, filled_qty, avg_price)
+    status can be 'FILLED', 'PARTIAL', 'FAILED'
+    """
+    logging.info(f"[{order_id}] Checking status for slice expecting {expected_qty} qty.")
+    
+    # Poll for up to 20 seconds for the slice to fill.
+    # If a market order doesn't fill quickly, something is very wrong.
+    for _ in range(10): 
+        try:
+            orderbook_response = fyers_api_client.get_order_book(data={"id": order_id})
+            if orderbook_response.get("s") == "ok" and orderbook_response.get("orderBook"):
+                order_details = orderbook_response["orderBook"][0]
+                status_code = order_details.get("status")
+                filled_qty = order_details.get("filledQty", 0)
+                avg_price = order_details.get("tradedPrice", 0)
+
+                if status_code == 2: # Status 2: 'traded'/'filled'
+                    if filled_qty == expected_qty:
+                        logging.info(f"[{order_id}] Slice confirmed as FULLY FILLED.")
+                        return ('FILLED', filled_qty, avg_price)
+                    elif filled_qty > 0:
+                        logging.warning(f"[{order_id}] Slice confirmed as PARTIALLY FILLED ({filled_qty}/{expected_qty}).")
+                        return ('PARTIAL', filled_qty, avg_price)
+                elif status_code in [5, 6]: # Status 5: 'rejected', 6: 'cancelled'
+                
+                    logging.error(f"[{order_id}] Slice FAILED: {order_details.get('message')}.")
+                    return ('FAILED', 0, 0)
+
+            await asyncio.sleep(2) # Wait 2 seconds before the next poll
+        except Exception as e:
+            logging.error(f"[{order_id}] Exception in check_slice_status: {e}", exc_info=True)
+            await asyncio.sleep(2)
+
+    logging.error(f"[{order_id}] Slice check timed out. Assuming failure.")
+    return ('FAILED', 0, 0)
+
+# In trade_server.py
+
+# Add 'estimated_cost=0' to the function definition
+async def execute_sliced_trade(symbol: str, total_qty: int, lot_size: int, action: str, estimated_cost: float = 0):
+    """
+    Manages the entire lifecycle of a trade, slicing it into compliant chunks
+    and handling failures with an All-or-Nothing strategy. It also reconciles
+    pessimistically locked margin.
+    """
+    global ACTIVE_POSITIONS, AVAILABLE_MARGIN
+    
+    if total_qty <= 0: return
+
+    side = 1 if action == "BUY" else -1
+    slices = []
+    qty_remaining = total_qty
+    max_qty_per_order = MAX_LOTS_PER_ORDER * lot_size
+
+    # 1. Calculate slices (no changes here)
+    while qty_remaining > 0:
+        slice_qty = min(qty_remaining, max_qty_per_order)
+        slices.append(slice_qty)
+        qty_remaining -= slice_qty
+
+    logging.info(f"Executing {action} for {total_qty} qty of {symbol} in {len(slices)} slices: {slices}")
+
+    # 2. Execute slices and handle failures (no changes here)
+    total_filled_qty = 0
+    total_cost_or_proceeds = 0
+    all_slices_successful = True
+    
+    for i, slice_qty in enumerate(slices):
+        logging.warning(f"--> Placing slice {i+1}/{len(slices)}: {action} {slice_qty} {symbol}")
+        order_data = {"symbol": symbol, "qty": slice_qty, "type": 2, "side": side, "productType": "INTRADAY", "validity": "DAY"}
+        
+        order_response = fyers_api_client.place_order(data=order_data)
+
+        if not (order_response.get("s") == "ok" and "id" in order_response):
+            logging.critical(f"Slice {i+1} submission FAILED. Aborting entire trade. Reason: {order_response}")
+            all_slices_successful = False
+            break
+
+        order_id = order_response["id"]
+        status, filled_qty, avg_price = await check_slice_status(order_id, slice_qty)
+
+        if status == 'FILLED':
+            total_filled_qty += filled_qty
+            total_cost_or_proceeds += filled_qty * avg_price
+            logging.info(f"Slice {i+1} successful. Total filled so far: {total_filled_qty}/{total_qty}")
+            if i < len(slices) - 1:
+                 await asyncio.sleep(DELAY_BETWEEN_SLICES_SEC)
+        else:
+            logging.critical(f"Slice {i+1} failed with status '{status}'. ABORTING & NEUTRALIZING ENTIRE TRADE.")
+            all_slices_successful = False
+            if filled_qty > 0:
+                logging.warning(f"Neutralizing partially filled position of {filled_qty} shares from the failed slice.")
+                neutralize_side = -1 if side == 1 else 1
+                neutralize_order = {"symbol": symbol, "qty": filled_qty, "type": 2, "side": neutralize_side, "productType": "INTRADAY", "validity": "DAY"}
+                fyers_api_client.place_order(data=neutralize_order)
+                total_filled_qty += filled_qty
+            break
+
+    # 3. Final State Update and Neutralization
+    async with trade_lock: # Acquire lock for final atomic state update
+        if all_slices_successful and total_filled_qty == total_qty:
+            logging.info(f"SUCCESS: Entire trade of {total_qty} {symbol} executed successfully.")
+            avg_trade_price = total_cost_or_proceeds / total_filled_qty if total_filled_qty > 0 else 0
+            if action == "BUY":
+                ACTIVE_POSITIONS[symbol] = {"qty": total_filled_qty, "entry_price": avg_trade_price}
+                # --- MARGIN RECONCILIATION (SUCCESS) ---
+                # We already deducted estimated_cost. Now, we correct it with the actual cost.
+                cost_difference = estimated_cost - total_cost_or_proceeds
+                AVAILABLE_MARGIN += cost_difference
+                logging.info(f"Margin reconciled. Difference of {cost_difference:.2f} adjusted.")
+            elif action == "SELL":
+                ACTIVE_POSITIONS.pop(symbol, None)
+                AVAILABLE_MARGIN += total_cost_or_proceeds # Add proceeds from sale
+            logging.warning(f"Final state updated. Available Margin: {AVAILABLE_MARGIN:.2f}")
+        else:
+            logging.critical(f"FAILURE: Trade for {total_qty} {symbol} did not complete. Final filled quantity for this attempt: {total_filled_qty}.")
+            # --- MARGIN RECONCILIATION (FAILURE) ---
+            if action == "BUY":
+                # The trade failed, so we must add back the margin we locked.
+                AVAILABLE_MARGIN += estimated_cost
+                logging.warning(f"BUY trade failed. Releasing locked margin of {estimated_cost:.2f}. New margin: {AVAILABLE_MARGIN:.2f}")
+            if total_filled_qty > 0:
+                logging.warning(f"Neutralizing the {total_filled_qty} shares from all attempted slices.")
+                neutralize_side = -1 if side == 1 else 1
+                # Note: Neutralizing a failed BUY will cost a bit of margin, which we are not accounting for here for simplicity,
+                # but it will be corrected on the next full sync or trade.
+                neutralize_order = {"symbol": symbol, "qty": total_filled_qty, "type": 2, "side": neutralize_side, "productType": "INTRADAY", "validity": "DAY"}
+                fyers_api_client.place_order(data=neutralize_order)
+
+# --- NEW ENDPOINT FOR UI ---
+@app.get("/positions")
+def get_positions():
+    """ A simple endpoint for the UI to fetch current positions and margin. """
+    return {"active_positions": ACTIVE_POSITIONS, "available_margin": AVAILABLE_MARGIN}
+
+# In trade_server.py
+
+# In trade_server.py
+
+# In trade_server.py
+
+@app.post("/trade_signal")
+async def handle_amibroker_signal(request: Request):
+    """ 
+    Receives a signal, dynamically fetches lot size, calculates total size, 
+    pessimistically locks margin, and hands it off to the execution manager.
+    """
+    async with trade_lock:
+        global AVAILABLE_MARGIN
+        if not fyers_api_client:
+            logging.error("Trade signal received, but Fyers client is not initialized. Ignoring.")
+            return {"status": "error", "message": "Fyers client not ready"}
+
+        try:
+            signal = await request.json()
+            logging.info(f"<-- Received Trade Signal from AmiBroker: {signal}")
+
+            symbol = signal.get("symbol")
+            action = signal.get("action").upper()
+            price = float(signal.get("price"))
+            
+            # --- DYNAMIC LOT SIZE FETCHING ---
+            lot_size = await get_lot_size_for_symbol(symbol)
+            if not lot_size or lot_size <= 0:
+                logging.error(f"[FATAL] Could not determine a valid lot size for {symbol}. Aborting trade.")
+                return {"status": "error", "reason": f"Could not get lot size for {symbol}"}
+            # --- END OF DYNAMIC LOGIC ---
+
+            if action == "BUY":
+                if symbol in ACTIVE_POSITIONS:
+                    logging.warning(f"[State Check] BUY signal for {symbol}, but already in position. Ignoring.")
+                    return {"status": "ignored", "reason": "Already in position"}
+                
+                capital_for_trade = AVAILABLE_MARGIN * CAPITAL_ALLOCATION_PERCENT
+                if price <= 0:
+                    logging.error(f"[Risk Check] Invalid price received: {price}. Cannot size trade.")
+                    return {"status": "error", "reason": "Invalid price for sizing"}
+
+                max_shares_possible = math.floor(capital_for_trade / price)
+                if max_shares_possible < lot_size:
+                    logging.error(f"[Risk Check] Insufficient capital. Cannot afford 1 lot. Need {price * lot_size:.2f}, have {capital_for_trade:.2f}.")
+                    return {"status": "error", "reason": "Cannot afford one lot"}
+                
+                num_lots = math.floor(max_shares_possible / lot_size)
+                final_qty = num_lots * lot_size
+                
+                estimated_cost = final_qty * price
+                AVAILABLE_MARGIN -= estimated_cost
+                logging.warning(f"[Margin Lock] Pessimistically locked {estimated_cost:.2f}. New temporary margin: {AVAILABLE_MARGIN:.2f}")
+                
+                asyncio.create_task(execute_sliced_trade(symbol, final_qty, lot_size, "BUY", estimated_cost))
+                return {"status": "submitted", "message": f"Execution for {final_qty} {symbol} started."}
+
+            elif action == "SELL":
+                if symbol not in ACTIVE_POSITIONS:
+                    logging.warning(f"[State Check] SELL signal for {symbol}, but no position exists. Ignoring.")
+                    return {"status": "ignored", "reason": "No position to sell"}
+                
+                qty_to_sell = ACTIVE_POSITIONS[symbol]['qty']
+                logging.info(f"[Sizing Logic] Squaring off position. Qty: {qty_to_sell}")
+                asyncio.create_task(execute_sliced_trade(symbol, qty_to_sell, lot_size, "SELL"))
+                return {"status": "submitted", "message": f"Execution for {qty_to_sell} {symbol} started."}
+
+            else:
+                logging.error(f"Invalid action '{action}' received.")
+                return {"status": "error", "reason": "Invalid action"}
+
+        except Exception as e:
+            logging.error(f"FATAL: Unhandled error in trade_signal handler: {e}", exc_info=True)
+            return {"status": "error", "message": "Internal server error"}
+
+if __name__ == "__main__":
+    print("\n"+"="*60)
+    print("  Starting OpenAlgo+ Fortress: The Definitive Trade Server (v3)")
+    print(f"  Listening on: http://127.0.0.1:8000")
+    print(f"  Max Lots Per Order Slice: {MAX_LOTS_PER_ORDER}")
+    print("  Press Ctrl+C to exit")
+    print("="*60+"\n")
+    uvicorn.run(app, host="127.0.0.1", port=8000)

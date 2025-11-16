@@ -1,0 +1,20 @@
+
+[package]
+name = "fast_math"
+version = "1.0.0"
+edition = "2021"
+
+[lib]
+name = "fast_math"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.20", features = ["extension-module"] }
+numpy = "0.20"
+ndarray = { version = "0.15", features = ["rayon"] }
+rayon = "1.8"
+
+[dependencies.pyo3-built]
+version = "0.4"
+default-features = false
+features = ["chrono", "serde"]

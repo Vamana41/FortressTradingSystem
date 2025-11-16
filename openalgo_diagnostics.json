@@ -1,0 +1,110 @@
+{
+  "timestamp": "2025-11-16T00:07:16.514004",
+  "base_url": "http://localhost:5000",
+  "summary": {
+    "total": 14,
+    "passed": 3,
+    "failed": 10,
+    "warnings": 1
+  },
+  "results": [
+    {
+      "test": "Server Connectivity",
+      "status": "PASS",
+      "message": "Server responding at http://localhost:5000",
+      "details": null,
+      "timestamp": "2025-11-16T00:07:09.308423"
+    },
+    {
+      "test": "API Endpoint /api/v1/ping",
+      "status": "FAIL",
+      "message": "Endpoint not found (status 404)",
+      "details": null,
+      "timestamp": "2025-11-16T00:07:09.320759"
+    },
+    {
+      "test": "API Endpoint /api/v1/funds",
+      "status": "FAIL",
+      "message": "Endpoint not found (status 404)",
+      "details": null,
+      "timestamp": "2025-11-16T00:07:10.344920"
+    },
+    {
+      "test": "API Endpoint /api/v1/positionbook",
+      "status": "FAIL",
+      "message": "Endpoint not found (status 404)",
+      "details": null,
+      "timestamp": "2025-11-16T00:07:10.356842"
+    },
+    {
+      "test": "API Endpoint /api/v1/orderbook",
+      "status": "FAIL",
+      "message": "Endpoint not found (status 404)",
+      "details": null,
+      "timestamp": "2025-11-16T00:07:11.369856"
+    },
+    {
+      "test": "API Endpoint /api/v1/tradebook",
+      "status": "FAIL",
+      "message": "Endpoint not found (status 404)",
+      "details": null,
+      "timestamp": "2025-11-16T00:07:11.383165"
+    },
+    {
+      "test": "API Endpoint /api/v1/holdings",
+      "status": "FAIL",
+      "message": "Endpoint not found (status 404)",
+      "details": null,
+      "timestamp": "2025-11-16T00:07:12.400546"
+    },
+    {
+      "test": "API Endpoint /api/v1/orders",
+      "status": "FAIL",
+      "message": "Endpoint not found (status 404)",
+      "details": null,
+      "timestamp": "2025-11-16T00:07:12.413047"
+    },
+    {
+      "test": "Login Page Access",
+      "status": "PASS",
+      "message": "Login page accessible",
+      "details": null,
+      "timestamp": "2025-11-16T00:07:13.428548"
+    },
+    {
+      "test": "API Key Page Access",
+      "status": "PASS",
+      "message": "API key page accessible (user may be logged in)",
+      "details": null,
+      "timestamp": "2025-11-16T00:07:14.451779"
+    },
+    {
+      "test": "API Key Test /api/v1/ping",
+      "status": "FAIL",
+      "message": "Unexpected status 404",
+      "details": null,
+      "timestamp": "2025-11-16T00:07:14.463861"
+    },
+    {
+      "test": "API Key Test /api/v1/funds",
+      "status": "FAIL",
+      "message": "Unexpected status 404",
+      "details": null,
+      "timestamp": "2025-11-16T00:07:15.483470"
+    },
+    {
+      "test": "API Key Test /api/v1/positionbook",
+      "status": "FAIL",
+      "message": "Unexpected status 404",
+      "details": null,
+      "timestamp": "2025-11-16T00:07:15.494812"
+    },
+    {
+      "test": "Broker Status",
+      "status": "WARN",
+      "message": "Broker status endpoint returned 404",
+      "details": null,
+      "timestamp": "2025-11-16T00:07:16.512262"
+    }
+  ]
+}

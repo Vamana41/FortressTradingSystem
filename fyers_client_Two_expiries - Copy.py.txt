@@ -1,0 +1,1213 @@
+# #####   Fyers Client (v47 Base + Persistent ATM v6 + Direct Login via .env) #####
+#
+# Base: v47 + Robust Rollover v4 + Unified ATM v5
+# Modifications:
+#   - Handles Fyers API v3 login directly using SessionModel and auth_code.
+#   - Reads credentials (APP_ID, SECRET_KEY, REDIRECT_URI, AUTH_CODE)
+#     from a local '.env' file using python-dotenv.
+#   - Requires a '.gitignore' file containing '.env' to prevent accidental commit.
+#   - Continues to use the relay server architecture.
+#   - CORRECTION: Selects ATM options for BOTH the nearest and the next weekly expiry.
+
+import asyncio
+import websockets
+import json
+from fyers_apiv3 import fyersModel # Keep fyersModel
+from fyers_apiv3.FyersWebsocket.data_ws import FyersDataSocket # Keep FyersDataSocket
+import logging
+import datetime
+from threading import Thread, Lock as ThreadingLock
+import queue
+import time
+import os
+import math
+import re
+import calendar
+import pytz
+import pandas as pd
+import requests
+# NEW: Import python-dotenv
+from dotenv import load_dotenv
+
+# --- NEW: Load Environment Variables from .env file ---
+# This line loads variables from a '.env' file in the same directory
+# into the environment, so os.getenv can read them.
+load_dotenv()
+logger_loadenv = logging.getLogger("LoadEnv") # Separate logger for early messages
+logger_loadenv.info("Attempted to load variables from .env file.")
+
+
+# --- Fyers API Credentials Configuration (Read from Environment/.env) ---
+# These will be populated from your .env file by load_dotenv()
+# os.getenv reads the loaded variables. Provide None as default to clearly indicate if missing.
+FYERS_APP_ID = os.getenv("FYERS_APP_ID")
+FYERS_SECRET_KEY = os.getenv("FYERS_SECRET_KEY")
+FYERS_REDIRECT_URI = os.getenv("FYERS_REDIRECT_URI")
+# *** IMPORTANT: You need to get a fresh Auth Code MANUALLY and put it in .env ***
+FYERS_AUTH_CODE = os.getenv("FYERS_AUTH_CODE")
+
+# --- Configuration (Paths, Relay, etc.) ---
+FYERS_LOG_PATH = r"C:\AmiPyScripts\fyers_logs"
+RELAY_SERVER_URI = "ws://localhost:10102"
+MASTER_CONTRACT_PATH = r"C:\AmiPyScripts\fyers_contracts" # Contracts and ATM symbols stored here
+RELAY_MAX_SIZE = 16 * 1024 * 1024 # 16 MiB
+
+# --- Symbol Mapping (Initial Placeholders - Corrected at Startup) ---
+SYMBOL_MAPPING = {
+    "MCX:CRUDEOILM25APRFUT": "CRUDEOILM-FUT",
+    "MCX:GOLDPETAL25FEBFUT": "GOLDPETAL-FUT",
+    "MCX:GOLDM25FEBFUT": "GOLDM-FUT",
+    "MCX:NATGASMINI25APRFUT": "NATGASMINI-FUT",
+    "MCX:SILVERMIC25APRFUT": "SILVERMIC-FUT",
+    "MCX:ZINCMINI25APRFUT": "ZINCMINI-FUT",
+    "MCX:ALUMINI25APRFUT": "ALUMINI-FUT",
+    "MCX:COPPER25APRFUT": "COPPER-FUT",
+    "MCX:LEADMINI25APRFUT": "LEADMINI-FUT",
+    "NSE:BANKNIFTY25APRFUT": "BANKNIFTY-FUT",
+    "NSE:NIFTY25APRFUT": "NIFTY-FUT",
+    "NSE:SBIN-EQ": "SBIN",
+}
+
+# --- General Settings ---
+WEBSOCKET_MAX_SIZE = 4 * 1024 * 1024 # Fyers WS Limit (check if still relevant)
+RECONNECT_DELAY = 5
+SEND_INTRA_BAR_SNAPSHOTS = True
+SNAPSHOT_THROTTLE_SECONDS = 0.4
+
+# --- Historical Data Settings ---
+HISTORICAL_RESOLUTION = "1"
+DEFAULT_BF_DAYS = 30
+MAX_HIST_DAYS_INTRADAY = 100
+FETCH_OPEN_INTEREST = False
+
+# --- ATM Option Logic Settings ---
+BANKNIFTY_INDEX_SYMBOL = "NSE:NIFTYBANK-INDEX"; BANKNIFTY_STRIKE_INTERVAL = 100
+NIFTY_INDEX_SYMBOL = "NSE:NIFTY50-INDEX"; NIFTY_STRIKE_INTERVAL = 50
+ATM_SELECTION_TIME_STR = "09:13:15"
+OPTION_CHAIN_STRIKE_COUNT = 2
+
+# --- Futures Rollover Settings ---
+MASTER_DOWNLOAD_TIME_STR = "08:50:00"
+ROLLOVER_CHECK_TIME_STR = "08:55:00"
+FUTURES_SUFFIX = "-FUT"
+
+# --- Fyers WebSocket Settings ---
+LITEMODE_WEBSOCKET = False
+
+# --- Logging Setup ---
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(threadName)s - FYERS_CLIENT - %(levelname)s - %(message)s')
+logger = logging.getLogger("FyersRelayClient") # Main logger
+
+# --- Global Variables ---
+current_bars = {}
+previous_vol = {}
+bar_queue = asyncio.Queue(maxsize=2000)
+fyers_queue = queue.Queue(maxsize=5000)
+fyers_connection_status = {"connected": False, "subscribed": False}
+fyers_api_client = None # Will be initialized after login
+last_snapshot_time = {}
+far_past_date = datetime.date(1970, 1, 1)
+last_atm_selection_run_date = far_past_date
+last_rollover_check_run_date = far_past_date
+last_master_download_run_date = far_past_date
+fyers_ws_client = None
+symbol_mapping_lock = asyncio.Lock()
+nfo_master_df = pd.DataFrame()
+mcx_master_df = pd.DataFrame()
+master_data_lock = ThreadingLock()
+main_event_loop = None
+resubscribe_event = asyncio.Event()
+DAILY_ATM_SYMBOLS_FILE_TPL = os.path.join(MASTER_CONTRACT_PATH, "daily_atm_symbols_{}.json")
+
+# --- Helper: Month Abbreviation to Number ---
+MONTH_ABBR_TO_NUM = { 'JAN': 1, 'FEB': 2, 'MAR': 3, 'APR': 4, 'MAY': 5, 'JUN': 6, 'JUL': 7, 'AUG': 8, 'SEP': 9, 'OCT': 10, 'NOV': 11, 'DEC': 12 }
+
+# --- [ Fyers Login Function (uses loaded variables) ] ---
+def perform_fyers_login():
+    """
+    Performs Fyers API login using SessionModel and Auth Code read from .env.
+    Returns the access token on success, None on failure.
+    """
+    logger.info("Attempting Fyers API v3 login using credentials from .env file...")
+
+    # Check if variables were loaded successfully
+    if not all([FYERS_APP_ID, FYERS_SECRET_KEY, FYERS_REDIRECT_URI, FYERS_AUTH_CODE]):
+        logger.critical("One or more required variables (FYERS_APP_ID, FYERS_SECRET_KEY, FYERS_REDIRECT_URI, FYERS_AUTH_CODE) not found in environment or .env file!")
+        logger.critical("Please ensure .env file exists and contains all required variables.")
+        return None
+    if len(FYERS_AUTH_CODE) < 20: # Basic check for likely invalid code
+        logger.critical("Invalid FYERS_AUTH_CODE detected in .env file. Length is too short.")
+        logger.critical("Please provide a fresh Auth Code in the .env file.")
+        logger.critical("Generate Auth Code URL (replace placeholders):")
+        logger.critical(f"https://api-t1.fyers.in/api/v3/generate-authcode?client_id={FYERS_APP_ID}&redirect_uri={FYERS_REDIRECT_URI}&response_type=code&state=sample_state")
+        logger.critical("(Use api.fyers.in for live environment)")
+        return None
+
+    session = fyersModel.SessionModel(
+        client_id=FYERS_APP_ID,
+        secret_key=FYERS_SECRET_KEY,
+        redirect_uri=FYERS_REDIRECT_URI,
+        response_type="code",
+        grant_type="authorization_code" # Important for auth code flow
+    )
+
+    try:
+        logger.info("Setting auth code in session...")
+        session.set_token(FYERS_AUTH_CODE) # Use the auth code loaded from .env
+
+        logger.info("Generating access token...")
+        response = session.generate_token() # Exchange auth code for access token
+
+        if response.get("s") == "ok" and response.get("access_token"):
+            access_token = response["access_token"]
+            logger.info(f"Successfully obtained Fyers Access Token (first 5 chars): {access_token[:5]}...")
+            return access_token
+        else:
+            error_msg = response.get("message", "Unknown error during token generation.")
+            logger.critical(f"Fyers token generation failed: {error_msg}")
+            logger.critical(f"Response details: {response}")
+            if "Invalid auth code" in error_msg:
+                 logger.error("The Auth Code in the .env file might be expired or incorrect. Please generate a new one and update the file.")
+            return None
+
+    except Exception as e:
+        logger.critical(f"Exception during Fyers login: {e}", exc_info=True)
+        return None
+
+# --- [ Fyers WebSocket Handling - on_fyers_message - unchanged ] ---
+def on_fyers_message(message):
+    # (Code is identical to previous version - omitted for brevity)
+    try:
+        data_to_queue = None
+        if isinstance(message, dict): data_to_queue = message
+        elif isinstance(message, (str, bytes)) and message.startswith(("{", b"{", "[", b"[")):
+            try: message_str = message.decode('utf-8') if isinstance(message, bytes) else message; data_to_queue = json.loads(message_str)
+            except (json.JSONDecodeError, UnicodeDecodeError) as decode_err: log_msg = message if isinstance(message, str) else repr(message); logger.error(f"Fyers JSON/decode error ({type(decode_err).__name__}): {log_msg[:200]}")
+        elif isinstance(message, bytes) and message == b'': logger.debug("Empty bytes msg Fyers.")
+        else:
+            try: message_repr = repr(message)
+            except Exception: message_repr = "[Unrepresentable Message]"
+            logger.warning(f"Unexpected Fyers msg type ({type(message)}): {message_repr[:200]}")
+        if data_to_queue is not None:
+            try:
+                fyers_queue.put_nowait(data_to_queue)
+                msg_type = data_to_queue.get("type")
+                if msg_type == 'sub' and 'Subscribed' in data_to_queue.get('message',''):
+                    logger.info(f"Subscription confirmation received via queue: {data_to_queue.get('message')}")
+                elif msg_type == 'cn' and data_to_queue.get('message') == 'Authentication done':
+                    logger.info(f"Authentication confirmation received via queue.")
+                elif 'code' in data_to_queue and data_to_queue.get('code') != 200:
+                    logger.warning(f"Fyers WS Msg Q'd (Code!=200): {data_to_queue}")
+            except queue.Full: logger.error("Fyers input queue FULL! Incoming data will be lost.")
+            except Exception as q_err: logger.error(f"Error queuing Fyers data: {q_err}")
+    except Exception as e: logger.error(f"Error in Fyers on_message handler: {e}", exc_info=True)
+
+
+# --- [ Fyers WebSocket Handling - run_fyers_thread - unchanged from previous version ] ---
+def run_fyers_thread(access_token, app_id):
+    # (Code is identical to previous version - omitted for brevity)
+    global fyers_connection_status, fyers_ws_client, previous_vol, main_event_loop, resubscribe_event
+    if not access_token or not app_id:
+        logger.critical("Fyers WS Thread cannot start: Missing access_token or app_id.")
+        fyers_connection_status = {"connected": False, "subscribed": False}
+        return # Exit thread if no credentials
+    ws_access_token = f"{app_id}:{access_token}"
+    logger.info(f"Fyers WS Thread preparing with AppID: {app_id}, Token (first 5): {access_token[:5]}...")
+    while True:
+        try:
+            logger.info("Initializing Fyers WebSocket in thread...")
+            os.makedirs(FYERS_LOG_PATH, exist_ok=True)
+            def on_connect_handler(): logger.info("Fyers WS on_connect triggered (SDK Thread).")
+            def on_error_handler(msg): logger.error(f"Fyers WS on_error reported (SDK Thread): {msg}")
+            def on_open_handler():
+                global fyers_connection_status, previous_vol, main_event_loop, resubscribe_event
+                logger.info(">>> Fyers WS Opened (on_open callback in SDK Thread) <<<")
+                fyers_connection_status["connected"] = True; fyers_connection_status["subscribed"] = False
+                logger.warning("Clearing previous volume cache on WebSocket open/reconnect."); previous_vol.clear()
+                if main_event_loop and main_event_loop.is_running():
+                    logger.info("Signaling main loop to check subscription..."); main_event_loop.call_soon_threadsafe(resubscribe_event.set)
+                else: logger.error("Cannot signal main loop: Event loop not available from on_open.")
+            def on_close_handler():
+                global fyers_connection_status
+                logger.warning("Fyers WS on_close triggered (SDK Thread). Connection lost.")
+                fyers_connection_status["connected"] = False; fyers_connection_status["subscribed"] = False
+            logger.info("Creating FyersDataSocket instance...")
+            temp_ws = FyersDataSocket(access_token=ws_access_token, log_path=FYERS_LOG_PATH, litemode=LITEMODE_WEBSOCKET, write_to_file=True, reconnect=True, on_connect=on_connect_handler, on_close=on_close_handler, on_error=on_error_handler, on_message=on_fyers_message)
+            temp_ws.on_open = on_open_handler
+            logger.info("FyersDataSocket instance created.")
+            fyers_ws_client = temp_ws
+            fyers_connection_status = {"connected": False, "subscribed": False}
+            logger.info("Starting Fyers WS connection (connect call)... SDK manages background loop.")
+            fyers_ws_client.connect()
+            logger.info("Fyers WS thread is now running in the background managed by the SDK.")
+            while fyers_ws_client and fyers_ws_client.is_connected():
+                time.sleep(15)
+            logger.warning("Fyers WS client is no longer connected (is_connected() is False).")
+        except Exception as e:
+            logger.error(f"Exception in Fyers WS setup/monitoring loop: {e}", exc_info=True)
+            fyers_connection_status = {"connected": False, "subscribed": False}
+            fyers_ws_client = None
+        logger.error(f"Fyers WS thread connection loop exited. Waiting {RECONNECT_DELAY}s before full WS re-initialization...")
+        fyers_connection_status = {"connected": False, "subscribed": False}
+        fyers_ws_client = None
+        time.sleep(RECONNECT_DELAY)
+    logger.critical("Exited the absolute outer loop of run_fyers_thread function (Should not happen).")
+
+
+# --- [ Subscription Handler Task - unchanged from previous version ] ---
+async def handle_subscriptions():
+    # (Code is identical to previous version - omitted for brevity)
+    global fyers_ws_client, fyers_connection_status, SYMBOL_MAPPING, symbol_mapping_lock, resubscribe_event
+    while True:
+        await resubscribe_event.wait(); logger.info("Subscription handler triggered by event."); resubscribe_event.clear()
+        connection_stabilization_delay = 1.0; logger.info(f"Waiting {connection_stabilization_delay}s for connection stability after on_open signal..."); await asyncio.sleep(connection_stabilization_delay)
+        if fyers_ws_client and fyers_connection_status["connected"] and not fyers_connection_status["subscribed"]:
+            logger.info(f"Condition met after delay: Connected=True, Subscribed=False. Attempting subscription.")
+            async with symbol_mapping_lock: current_symbols = list(SYMBOL_MAPPING.keys())
+            if current_symbols:
+                try:
+                    logger.info(f"Attempting subscription (from handler task) to {len(current_symbols)} symbols..."); fyers_ws_client.subscribe(symbols=current_symbols, data_type="SymbolUpdate")
+                    logger.info("Subscribe command sent successfully. Waiting for confirmation message via on_message.")
+                except Exception as sub_err: logger.error(f"Subscription call failed from handler task: {sub_err}", exc_info=True)
+            elif not current_symbols: logger.info("Symbol mapping is empty. No subscription needed."); fyers_connection_status["subscribed"] = True # Mark as subscribed if empty
+            else: logger.warning("Subscription handler: Connected but fyers_ws_client might be None?") # Should not happen if check passed
+        elif fyers_connection_status["connected"] and fyers_connection_status["subscribed"]: logger.info("Subscription handler: Already connected and subscribed after stabilization delay check.")
+        elif not fyers_connection_status["connected"]: logger.warning("Subscription handler: No longer connected after stabilization delay.")
+        else: logger.debug("Subscription handler: Unhandled state after stabilization delay check.")
+
+
+# --- [ Bar Aggregation - queue_bar_snapshot - unchanged ] ---
+async def queue_bar_snapshot(ami_symbol, bar_data, is_final_bar=False):
+    # (Code is identical to previous version - omitted for brevity)
+    global last_snapshot_time
+    if not bar_data or not all(k in bar_data for k in ['timestamp', 'open', 'high', 'low', 'close', 'volume']): logger.warning(f"Incomplete bar data for {ami_symbol}: {bar_data}"); return False
+    current_time = time.monotonic(); last_sent = last_snapshot_time.get(ami_symbol, 0); should_send = is_final_bar or (current_time - last_sent >= SNAPSHOT_THROTTLE_SECONDS)
+    if not should_send: return False
+    try:
+        d = int(bar_data['timestamp'].strftime("%Y%m%d")); t = int(bar_data['timestamp'].strftime("%H%M00")); json_rtd_bar = [{"n": ami_symbol, "d": d, "t": t, "o": float(bar_data['open']), "h": float(bar_data['high']), "l": float(bar_data['low']), "c": float(bar_data['close']), "v": int(bar_data['volume'])}]
+        await bar_queue.put(json_rtd_bar); last_snapshot_time[ami_symbol] = current_time
+        if is_final_bar: logger.info(f"** Queued Final Bar -> Relay: {json_rtd_bar} **")
+        else: logger.debug(f"Queued Snapshot -> Relay: {json_rtd_bar}")
+        return True
+    except asyncio.QueueFull: logger.error(f"BAR output queue full! Dropping bar/snapshot for {ami_symbol}."); return False
+    except Exception as e: logger.error(f"Error formatting/queuing bar snapshot for {ami_symbol}: {e}", exc_info=True); return False
+
+
+# --- [ Bar Aggregation - process_fyers_messages - unchanged ] ---
+async def process_fyers_messages():
+    # (Code is identical to previous version - omitted for brevity)
+    global current_bars, previous_vol, fyers_connection_status, SYMBOL_MAPPING, symbol_mapping_lock
+    logger.info("Starting Fyers message processing task.")
+    while True:
+        try: data = await asyncio.get_event_loop().run_in_executor(None, fyers_queue.get)
+        except Exception as q_get_err: logger.error(f"Error getting message from fyers_queue: {q_get_err}", exc_info=True); await asyncio.sleep(1); continue
+        try:
+            if not isinstance(data, dict): logger.warning(f"Dequeued item not a dictionary: {type(data)}"); continue
+            msg_type = data.get("type")
+            if msg_type == 'sub' or (msg_type == 'cn' and data.get('message') == 'Authentication done'):
+                if data.get('code') == 200:
+                    if msg_type == 'sub' and 'Subscribed' in data.get('message',''): logger.info(f">>> Fyers Subscription Acknowledged (Status OK): {data.get('message', '')} <<<"); fyers_connection_status["subscribed"] = True
+                    elif msg_type == 'cn': logger.info(">>> Fyers Authentication Acknowledged (Status OK) <<<")
+                else: logger.error(f"Fyers Subscription/Connection Failed: {data}"); fyers_connection_status["subscribed"] = False
+                continue
+            if msg_type == "sf" and "symbol" in data:
+                fyers_symbol = data["symbol"]; ami_symbol = None
+                async with symbol_mapping_lock: ami_symbol = SYMBOL_MAPPING.get(fyers_symbol)
+                if ami_symbol:
+                    ltp = data.get("ltp"); vol_today = data.get("vol_traded_today"); feed_time_epoch = data.get("exch_feed_time")
+                    if ltp is None or vol_today is None or feed_time_epoch is None: logger.warning(f"Incomplete tick data for {fyers_symbol}: {data}"); continue
+                    try:
+                        tick_time = datetime.datetime.fromtimestamp(feed_time_epoch); minute_start_time = tick_time.replace(second=0, microsecond=0); current_bar_info = current_bars.get(ami_symbol)
+                        if current_bar_info is None or current_bar_info['timestamp'] < minute_start_time:
+                            if current_bar_info is not None: await queue_bar_snapshot(ami_symbol, current_bar_info, is_final_bar=True)
+                            last_total_vol = previous_vol.get(ami_symbol, 0); tick_volume = 0
+                            if last_total_vol == 0: tick_volume = vol_today
+                            elif vol_today >= last_total_vol: tick_volume = vol_today - last_total_vol
+                            else: logger.warning(f"Vol reset detected? Symbol={ami_symbol}, PrevVol={last_total_vol}, NewVol={vol_today}. Using NewVol."); tick_volume = vol_today
+                            current_bars[ami_symbol] = {'timestamp': minute_start_time, 'open': ltp, 'high': ltp, 'low': ltp, 'close': ltp, 'volume': max(0, tick_volume)}; previous_vol[ami_symbol] = vol_today; logger.debug(f"Started New Bar {ami_symbol}: O={ltp},V={tick_volume}")
+                            if SEND_INTRA_BAR_SNAPSHOTS: await queue_bar_snapshot(ami_symbol, current_bars[ami_symbol], is_final_bar=False)
+                        elif current_bar_info is not None and current_bar_info['timestamp'] == minute_start_time:
+                            bar = current_bars[ami_symbol]; bar['high'] = max(bar['high'], ltp); bar['low'] = min(bar['low'], ltp); bar['close'] = ltp
+                            last_total_vol = previous_vol.get(ami_symbol, 0); tick_volume = 0
+                            if vol_today >= last_total_vol: tick_volume = vol_today - last_total_vol
+                            else: logger.warning(f"Vol reset mid-bar? Symbol={ami_symbol}, PrevVol={last_total_vol}, NewVol={vol_today}. TickVol=0."); tick_volume = 0
+                            bar['volume'] += max(0, tick_volume); previous_vol[ami_symbol] = vol_today
+                            if SEND_INTRA_BAR_SNAPSHOTS: await queue_bar_snapshot(ami_symbol, bar, is_final_bar=False)
+                        else: logger.warning(f"Tick time mismatch? Tick:{tick_time}, Bar Start:{current_bar_info['timestamp'] if current_bar_info else 'None'}. Ignored.")
+                    except ValueError as ve: logger.error(f"TS convert error {feed_time_epoch}: {ve}")
+                    except Exception as bar_ex: logger.error(f"Bar processing error {ami_symbol}: {bar_ex}", exc_info=True)
+            elif 'code' in data and data.get('code') != 200: pass # Already logged by WS thread usually
+            elif msg_type != 'hb': pass # Ignore heartbeats
+        except Exception as e: logger.error(f"Outer error process_fyers_messages loop for data: {data}: {e}", exc_info=True)
+        finally: fyers_queue.task_done()
+
+
+# --- [ Relay Comm - send_rtd_to_relay - unchanged ] ---
+async def send_rtd_to_relay(websocket):
+    # (Code is identical to previous version - omitted for brevity)
+    logger.info("Starting RTD sender task (to relay).")
+    while True:
+        json_rtd_bar = None
+        try:
+            json_rtd_bar = await bar_queue.get()
+            try:
+                await websocket.send(json.dumps(json_rtd_bar, separators=(',', ':'))); logger.debug(f"--> Sent RTD to relay: {json_rtd_bar}"); bar_queue.task_done()
+            except websockets.ConnectionClosed:
+                logger.error("Relay connection closed while trying to send.");
+                if json_rtd_bar:
+                    try: await bar_queue.put(json_rtd_bar); logger.info("Re-queued unsent bar due to connection closure.")
+                    except asyncio.QueueFull: logger.error("Bar queue full on re-queue attempt (send failure)! Data lost.")
+                break
+            except Exception as send_err: logger.error(f"Error sending message to relay: {send_err}", exc_info=True); bar_queue.task_done(); await asyncio.sleep(0.5)
+        except Exception as get_err: logger.error(f"Error getting item from bar_queue: {get_err}", exc_info=True); await asyncio.sleep(1)
+
+
+# --- [ Relay Comm - get_and_send_historical_data - unchanged ] ---
+async def get_and_send_historical_data(websocket, cmd, ami_symbol, num_days=DEFAULT_BF_DAYS):
+    # (Code is identical to previous version - omitted for brevity, uses global fyers_api_client)
+    global fyers_api_client, SYMBOL_MAPPING, symbol_mapping_lock, master_data_lock, nfo_master_df, mcx_master_df
+    if fyers_api_client is None: logger.error("Fyers REST API client NA hist."); await websocket.send(json.dumps({"cmd": cmd, "code": 500, "arg": f"Fyers client NA {ami_symbol}"}, separators=(',', ':'))); return
+    fyers_hist_symbol = None; logger.debug(f"Backfill requested for AmiBroker symbol: '{ami_symbol}'")
+    async with symbol_mapping_lock: current_mapping = SYMBOL_MAPPING.copy()
+    for fyers_key, mapped_value in current_mapping.items():
+        if mapped_value == ami_symbol: fyers_hist_symbol = fyers_key; logger.info(f"Backfill Lookup: Found direct value match for '{ami_symbol}' -> Fyers Symbol '{fyers_key}'"); break
+    if fyers_hist_symbol is None and isinstance(ami_symbol, str) and ami_symbol.endswith(FUTURES_SUFFIX):
+         logger.warning(f"Backfill Lookup: Direct match failed for placeholder '{ami_symbol}'. Finding ACTIVE Fyers symbol...")
+         base_name = ami_symbol[:-len(FUTURES_SUFFIX)]; segment = None; temp_fyers_key_for_segment = None
+         current_mapping_for_segment = current_mapping
+         for f_key, a_val in current_mapping_for_segment.items():
+             if a_val == ami_symbol or (isinstance(a_val, str) and a_val.startswith(base_name) and a_val.endswith("FUT")): temp_fyers_key_for_segment = f_key; break
+         if temp_fyers_key_for_segment: segment = "NFO" if temp_fyers_key_for_segment.startswith(("NSE:", "NFO:")) else "MCX" if temp_fyers_key_for_segment.startswith("MCX:") else None
+         if segment:
+             fyers_hist_symbol = await find_active_front_month_future(base_name, segment)
+             if fyers_hist_symbol: logger.info(f"Backfill Lookup Fallback: Using ACTIVE Fyers symbol '{fyers_hist_symbol}' for placeholder '{ami_symbol}'.")
+             else: logger.error(f"Backfill Lookup Fallback: Could not find ACTIVE Fyers symbol for base '{base_name}' ({segment}).")
+         else: logger.error(f"Backfill Lookup Fallback: Cannot determine segment for base '{base_name}'.")
+    if not fyers_hist_symbol: logger.error(f"Backfill failed: AmiBroker symbol '{ami_symbol}' could not be mapped."); await websocket.send(json.dumps({"cmd": cmd, "code": 404, "arg": f"Symbol '{ami_symbol}' not found/mapped"}, separators=(',', ':'))); return
+    try:
+        logger.info(f"Fetching history for {ami_symbol} (using Fyers: {fyers_hist_symbol}), Days: {num_days}...")
+        now = datetime.datetime.now(); range_to_dt = now - datetime.timedelta(minutes=int(HISTORICAL_RESOLUTION) if HISTORICAL_RESOLUTION.isdigit() else 1); range_to_epoch = int(range_to_dt.timestamp())
+        max_hist_limit = MAX_HIST_DAYS_INTRADAY if HISTORICAL_RESOLUTION != "D" else 365; actual_days_back = min(num_days, max_hist_limit)
+        if num_days > max_hist_limit: logger.warning(f"Requested {num_days} days, limit is {max_hist_limit}. Fetching {max_hist_limit}.")
+        range_from_dt = now - datetime.timedelta(days=actual_days_back); range_from_epoch = int(range_from_dt.timestamp())
+        payload = {"symbol": fyers_hist_symbol, "resolution": HISTORICAL_RESOLUTION, "date_format": "0", "range_from": str(range_from_epoch), "range_to": str(range_to_epoch), "cont_flag": "1"}
+        wsrtd_format = "dtohlcv"; oi_index = -1; is_equity = "-EQ" in fyers_hist_symbol.upper()
+        if FETCH_OPEN_INTEREST and not is_equity: payload["oi_flag"] = "1"; wsrtd_format = "dtohlcvi"; oi_index = 6; logger.info(f"OI flag set for {ami_symbol} history.")
+        elif FETCH_OPEN_INTEREST and is_equity: logger.info(f"OI requested but skipped for equity {ami_symbol}.")
+        logger.debug(f"Fyers history API payload: {payload}"); loop = asyncio.get_running_loop(); history_response = await loop.run_in_executor(None, fyers_api_client.history, payload); logger.debug(f"Fyers history API status: {history_response.get('s')}")
+        bars_data = []
+        if history_response.get('s') == 'ok' and 'candles' in history_response:
+            candles = history_response['candles']; logger.info(f"Received {len(candles)} hist candles for {ami_symbol} (Fyers: {fyers_hist_symbol}).")
+            for candle in candles:
+                try:
+                    ts_epoch, o, h, l, c, v = candle[0:6]; ts = datetime.datetime.fromtimestamp(ts_epoch); d_hist = int(ts.strftime('%Y%m%d')); t_hist = int(ts.strftime('%H%M00')); oi = 0
+                    if wsrtd_format == "dtohlcvi" and oi_index != -1 and len(candle) > oi_index: oi = int(candle[oi_index])
+                    if wsrtd_format == "dtohlcvi": bars_data.append([d_hist, t_hist, float(o), float(h), float(l), float(c), int(v), oi])
+                    else: bars_data.append([d_hist, t_hist, float(o), float(h), float(l), float(c), int(v)])
+                except (IndexError, ValueError, TypeError) as fmt_err: logger.error(f"Error formatting hist candle {candle} for {ami_symbol}: {fmt_err}"); continue
+            bars_data.sort(key=lambda x: (x[0], x[1])); hist_msg = {"hist": ami_symbol, "format": wsrtd_format, "bars": bars_data}
+            await websocket.send(json.dumps(hist_msg, separators=(',', ':'))); logger.info(f"--> Sent {len(bars_data)} hist bars ({wsrtd_format}) for {ami_symbol} to relay."); await asyncio.sleep(0.1)
+        elif history_response.get('s') == 'error': error_msg = history_response.get('message', 'Unknown Fyers API error'); logger.error(f"Fyers history API error for {ami_symbol} (Fyers: {fyers_hist_symbol}): {error_msg}"); await websocket.send(json.dumps({"cmd": cmd, "code": 400, "arg": f"Fyers API Error ({ami_symbol}): {error_msg}"}, separators=(',', ':')))
+        else: logger.warning(f"No hist candles received for {ami_symbol} (Fyers: {fyers_hist_symbol}). Response: {history_response}"); await websocket.send(json.dumps({"cmd": cmd, "code": 404, "arg": f"No hist data returned for {ami_symbol}"}, separators=(',', ':')))
+    except Exception as e: logger.error(f"Error fetching/sending hist data for {ami_symbol} (Fyers: {fyers_hist_symbol}): {e}", exc_info=True); await websocket.send(json.dumps({"cmd": cmd, "code": 500, "arg": f"Internal error fetching history for {ami_symbol}: {e}"}, separators=(',', ':')))
+
+
+# --- [ Relay Comm - receive_commands_from_relay - unchanged ] ---
+async def receive_commands_from_relay(websocket):
+    # (Code is identical to previous version - omitted for brevity)
+    logger.info("Starting command receiver task (listening to relay).")
+    while True:
+        message = None
+        try: message = await websocket.recv()
+        except websockets.ConnectionClosed as e_closed: logger.error(f"Relay connection closed while waiting for command: {e_closed}"); break
+        except Exception as e_recv: logger.error(f"Error receiving command from relay: {e_recv}", exc_info=True); await asyncio.sleep(1); continue
+        try:
+            if isinstance(message, str) and message.startswith(R'['): continue # Ignore likely RTD echo
+            if isinstance(message, str) and message.startswith(R'{'):
+                data = None
+                try:
+                    data = json.loads(message); logger.info(f"<-- Received from relay: {data}")
+                    cmd = data.get("cmd"); arg = data.get("arg")
+                    if cmd in ["bfsym", "bffull", "bfauto"]:
+                        req_symbol = None; days = DEFAULT_BF_DAYS
+                        if isinstance(arg, str):
+                            parts = arg.split(' '); req_symbol = parts[0] if parts else arg
+                            if cmd == "bffull": days_limit = MAX_HIST_DAYS_INTRADAY if HISTORICAL_RESOLUTION != "D" else 365; days = days_limit; logger.info(f"Using max days={days} for bffull {req_symbol}")
+                            elif cmd == "bfsym" and len(parts) > 1:
+                                try: days_arg = int(parts[-1]); days_limit = MAX_HIST_DAYS_INTRADAY if HISTORICAL_RESOLUTION != "D" else 365; days = min(days_arg, days_limit); logger.info(f"Parsed days={days} (limit={days_limit}) for bfsym {req_symbol}")
+                                except ValueError: logger.warning(f"Could not parse day count from bfsym arg: '{arg}'. Using default {DEFAULT_BF_DAYS}."); days = DEFAULT_BF_DAYS
+                            else: days = DEFAULT_BF_DAYS
+                        elif cmd == "bfauto": req_symbol = arg; days = DEFAULT_BF_DAYS
+                        if req_symbol: asyncio.create_task(get_and_send_historical_data(websocket, cmd, req_symbol, days))
+                        else: logger.warning(f"Could not extract symbol from {cmd} command: {arg}")
+                    elif cmd == "addsym": logger.info(f"Ack 'addsym' {arg} (manual restart required)"); response = {"cmd": "addsym", "code": 200, "arg": f"{arg} ack (restart client)"}; await websocket.send(json.dumps(response, separators=(',', ':')))
+                    elif cmd == "remsym": logger.info(f"Ack 'remsym' {arg} (manual restart required)"); response = {"cmd": "remsym", "code": 200, "arg": f"{arg} ack (restart client)"}; await websocket.send(json.dumps(response, separators=(',', ':')))
+                    elif cmd == "bfall": logger.warning("'bfall' NI."); await websocket.send(json.dumps({"cmd": cmd, "code": 501, "arg": "bfall NI"}, separators=(',', ':')))
+                    elif cmd == "cping":
+                         symbol_count = 0
+                         async with symbol_mapping_lock: symbol_count = len(SYMBOL_MAPPING)
+                         f_stat = "ON" if fyers_connection_status["connected"] else "OFF"; f_sub = "OK" if fyers_connection_status["subscribed"] else "NO"
+                         pong_msg = f"FyersPong|FyersWS:{f_stat}(Sub:{f_sub})|Symbols:{symbol_count}"; await websocket.send(json.dumps({"cmd": "cping", "code": 200, "arg": pong_msg}, separators=(',', ':'))); logger.info(f"Responded cping: {pong_msg}")
+                    else: logger.warning(f"Unhandled relay cmd: '{cmd}'")
+                except json.JSONDecodeError: logger.error(f"Invalid JSON from relay: {message[:200]}")
+                except Exception as cmd_ex: logger.error(f"Error processing command '{data}': {cmd_ex}", exc_info=True)
+            else: logger.warning(f"Unexpected message format from relay: Type={type(message)}, Content='{str(message)[:100]}...'")
+        except Exception as process_err: logger.error(f"Error processing received message: {process_err}", exc_info=True); await asyncio.sleep(1)
+
+
+# --- [ Helper Functions for Persisting ATM Symbols - unchanged ] ---
+def save_daily_atm_symbols(symbols_dict_to_add):
+    # (Code is identical to previous version - omitted for brevity)
+    if not symbols_dict_to_add: return False
+    today_str = datetime.date.today().strftime("%Y-%m-%d"); file_path = DAILY_ATM_SYMBOLS_FILE_TPL.format(today_str)
+    logger.info(f"Attempting to save {len(symbols_dict_to_add)} ATM symbols to {file_path}")
+    try:
+        existing_data = {}
+        if os.path.exists(file_path):
+            with open(file_path, 'r') as f:
+                try: existing_data = json.load(f);
+                except json.JSONDecodeError: logger.warning(f"Could not decode {file_path}. Overwriting."); existing_data = {}
+        else: logger.info(f"Creating new ATM symbols file: {file_path}")
+        existing_data.update(symbols_dict_to_add)
+        with open(file_path, 'w') as f: json.dump(existing_data, f, indent=4)
+        logger.info(f"Successfully saved/updated {len(symbols_dict_to_add)} ATM symbols. Total in file: {len(existing_data)}")
+        return True
+    except Exception as e: logger.error(f"Error saving daily ATM symbols: {e}", exc_info=True); return False
+
+def load_daily_atm_symbols():
+    # (Code is identical to previous version - omitted for brevity)
+    today_str = datetime.date.today().strftime("%Y-%m-%d"); file_path = DAILY_ATM_SYMBOLS_FILE_TPL.format(today_str)
+    loaded_symbols = {}
+    if os.path.exists(file_path):
+        try:
+            with open(file_path, 'r') as f: loaded_symbols = json.load(f)
+            if not isinstance(loaded_symbols, dict): logger.error(f"Loaded ATM file {file_path} invalid format."); return {}
+            logger.info(f"Successfully loaded {len(loaded_symbols)} saved ATM symbols for today from {file_path}")
+        except Exception as e: logger.error(f"Error loading saved ATM symbols: {e}", exc_info=True); loaded_symbols = {}
+    else: logger.info(f"No saved ATM symbols file found for today ({file_path}).")
+    return loaded_symbols
+
+def cleanup_old_atm_files(days_to_keep=1):
+    # (Code is identical to previous version - omitted for brevity)
+    logger.info(f"Cleaning up ATM symbol files older than {days_to_keep} days...")
+    cutoff_date = datetime.date.today() - datetime.timedelta(days=days_to_keep); count = 0
+    try:
+        if not os.path.exists(MASTER_CONTRACT_PATH): logger.warning(f"Path not found for cleanup: {MASTER_CONTRACT_PATH}"); return
+        for filename in os.listdir(MASTER_CONTRACT_PATH):
+            match = re.match(r"^daily_atm_symbols_(\d{4}-\d{2}-\d{2})\.json$", filename)
+            if match:
+                try:
+                    file_date = datetime.datetime.strptime(match.group(1), "%Y-%m-%d").date()
+                    if file_date < cutoff_date:
+                        file_path = os.path.join(MASTER_CONTRACT_PATH, filename); os.remove(file_path); logger.info(f"Deleted old ATM file: {filename}"); count += 1
+                except Exception as e: logger.warning(f"Error processing/deleting ATM file {filename}: {e}")
+    except Exception as e: logger.error(f"Error during ATM file cleanup: {e}", exc_info=True)
+    logger.info(f"ATM file cleanup complete. Deleted {count} files.")
+
+# --- [ Expiry Selection - Nifty Weekly - REMOVED ] ---
+# This helper function is no longer needed as its logic has been integrated
+# into the main ATM selection function for consistency.
+
+# --- [ ATM Selection - BankNifty (Nearest + Next Expiry) - DEFINITIVE FIX ] ---
+async def select_and_subscribe_banknifty_atm():
+    global fyers_api_client, SYMBOL_MAPPING, symbol_mapping_lock, nfo_master_df, master_data_lock
+    logger.warning("Attempting BankNifty Nearest & Next Expiry ATM Strike Selection...")
+    index_symbol, strike_interval, base_underlying, segment = BANKNIFTY_INDEX_SYMBOL, BANKNIFTY_STRIKE_INTERVAL, "BANKNIFTY", "NFO"
+
+    if fyers_api_client is None: logger.error("Fyers REST client NA for BankNifty ATM."); return False
+    
+    # 1. Fetch LTP and calculate ATM strike
+    loop = asyncio.get_running_loop()
+    try:
+        quote_payload = {"symbols": index_symbol}
+        quote_response = await loop.run_in_executor(None, fyers_api_client.quotes, quote_payload)
+        if not (quote_response.get('s') == 'ok' and quote_response.get('d') and quote_response['d'][0].get('v')):
+            logger.error(f"BankNifty Quote request failed: {quote_response}"); return False
+        local_ltp = quote_response['d'][0]['v'].get('lp')
+        if local_ltp is None: logger.error("BankNifty Quote response missing LTP."); return False
+        target_atm_strike = round(local_ltp / strike_interval) * strike_interval
+        logger.info(f"Got {index_symbol} LTP: {local_ltp}. Target ATM strike: {target_atm_strike}")
+    except Exception as e:
+        logger.error(f"Error fetching/parsing {index_symbol} quote: {e}", exc_info=True); return False
+
+    # 2. Fetch Option Chain to get expiries and closest strike
+    active_future = await find_active_front_month_future(base_underlying, segment)
+    if not active_future: logger.error(f"Could not determine active future for {base_underlying}."); return False
+    
+    expiries_to_process, actual_atm_strike = [], None
+    try:
+        option_chain_payload = {"symbol": active_future, "strikecount": OPTION_CHAIN_STRIKE_COUNT}
+        option_chain_response = await loop.run_in_executor(None, fyers_api_client.optionchain, option_chain_payload)
+        oc_data = option_chain_response.get('data', {})
+        
+        # Get and sort expiries
+        if 'expiryData' in oc_data:
+            api_expiry_dates = sorted([
+                (datetime.datetime.strptime(exp['date'], "%d-%m-%Y").date(), exp['date'])
+                for exp in oc_data['expiryData'] if exp.get('date')
+            ], key=lambda x: x[0])
+            
+            valid_expiries = [exp for exp in api_expiry_dates if exp[0] >= datetime.date.today()]
+            if len(valid_expiries) > 0: expiries_to_process.append(valid_expiries[0])
+            if len(valid_expiries) > 1: expiries_to_process.append(valid_expiries[1])
+            logger.info(f"BankNifty Expiries to process: {[d[1] for d in expiries_to_process]}")
+        
+        # Get closest strike from OC
+        options_chain = oc_data.get('optionsChain', [])
+        min_diff = float('inf')
+        for entry in options_chain:
+            strike = entry.get('strike_price')
+            if strike is not None and abs(strike - target_atm_strike) < min_diff:
+                min_diff = abs(strike - target_atm_strike)
+                actual_atm_strike = strike
+        
+        if actual_atm_strike is None: logger.error(f"Could not find ATM strike near {target_atm_strike}."); return False
+        logger.info(f"Identified closest BankNifty ATM strike in OC: {actual_atm_strike}")
+    except Exception as e:
+        logger.error(f"Error during BankNifty OC fetch/processing: {e}", exc_info=True); return False
+
+    if not expiries_to_process: logger.error("No valid expiries found for BankNifty."); return False
+
+    # 3. Look up symbols in master contract file and map them
+    newly_added, symbols_to_save = False, {}
+    with master_data_lock:
+        if nfo_master_df.empty: logger.error("NFO Master DataFrame is empty. Cannot look up symbols."); return False
+        for expiry_date_obj, expiry_date_str in expiries_to_process:
+            for opt_type in ["CE", "PE"]:
+                try:
+                    # THE RELIABLE LOOKUP
+                    contract_row = nfo_master_df.loc[
+                        (nfo_master_df['Underlying symbol'] == base_underlying) &
+                        (nfo_master_df['Expiry date'] == expiry_date_obj) &
+                        (nfo_master_df['Strike price'] == actual_atm_strike) &
+                        (nfo_master_df['Option type'] == opt_type)
+                    ]
+                    if not contract_row.empty:
+                        fyers_symbol = contract_row.iloc[0]['Symbol ticker']
+                        ami_date = expiry_date_obj.strftime("%d%b%y").upper()
+                        ami_symbol = f"{base_underlying}{ami_date}{int(actual_atm_strike)}{opt_type}"
+                        
+                        async with symbol_mapping_lock:
+                            if fyers_symbol not in SYMBOL_MAPPING:
+                                SYMBOL_MAPPING[fyers_symbol] = ami_symbol
+                                symbols_to_save[fyers_symbol] = ami_symbol
+                                newly_added = True
+                                logger.info(f"Added BN ({expiry_date_str}): {fyers_symbol} -> {ami_symbol}")
+                    else:
+                        logger.warning(f"Could not find BankNifty contract in master file for Strike:{actual_atm_strike}, Expiry:{expiry_date_str}, Type:{opt_type}")
+                except Exception as e:
+                    logger.error(f"Error looking up BankNifty symbol for {expiry_date_str} {opt_type}: {e}", exc_info=True)
+
+    if symbols_to_save: save_daily_atm_symbols(symbols_to_save)
+    return newly_added
+
+
+# --- [ ATM Selection - Nifty Weekly (Nearest + Next Expiry) - DEFINITIVE FIX ] ---
+async def select_and_subscribe_nifty_weekly_atm():
+    global fyers_api_client, SYMBOL_MAPPING, symbol_mapping_lock, nfo_master_df, master_data_lock
+    logger.warning("Attempting Nifty Nearest & Next Weekly Expiry ATM Strike Selection...")
+    index_symbol, strike_interval, base_underlying, segment = NIFTY_INDEX_SYMBOL, NIFTY_STRIKE_INTERVAL, "NIFTY", "NFO"
+
+    if fyers_api_client is None: logger.error("Fyers REST client NA for Nifty ATM."); return False
+
+    # 1. Fetch LTP and calculate ATM strike
+    loop = asyncio.get_running_loop()
+    try:
+        quote_payload = {"symbols": index_symbol}
+        quote_response = await loop.run_in_executor(None, fyers_api_client.quotes, quote_payload)
+        if not (quote_response.get('s') == 'ok' and quote_response.get('d') and quote_response['d'][0].get('v')):
+            logger.error(f"Nifty Quote request failed: {quote_response}"); return False
+        local_ltp = quote_response['d'][0]['v'].get('lp')
+        if local_ltp is None: logger.error("Nifty Quote response missing LTP."); return False
+        target_atm_strike = round(local_ltp / strike_interval) * strike_interval
+        logger.info(f"Got {index_symbol} LTP: {local_ltp}. Target ATM strike: {target_atm_strike}")
+    except Exception as e:
+        logger.error(f"Error fetching/parsing {index_symbol} quote: {e}", exc_info=True); return False
+
+    # 2. Fetch Option Chain to get expiries and closest strike
+    active_future = await find_active_front_month_future(base_underlying, segment)
+    if not active_future: logger.error(f"Could not determine active future for {base_underlying}."); return False
+    
+    expiries_to_process, actual_atm_strike = [], None
+    try:
+        option_chain_payload = {"symbol": active_future, "strikecount": OPTION_CHAIN_STRIKE_COUNT}
+        option_chain_response = await loop.run_in_executor(None, fyers_api_client.optionchain, option_chain_payload)
+        oc_data = option_chain_response.get('data', {})
+        
+        # Get and sort expiries
+        if 'expiryData' in oc_data:
+            api_expiry_dates = sorted([
+                (datetime.datetime.strptime(exp['date'], "%d-%m-%Y").date(), exp['date'])
+                for exp in oc_data['expiryData'] if exp.get('date')
+            ], key=lambda x: x[0])
+            
+            valid_expiries = [exp for exp in api_expiry_dates if exp[0] >= datetime.date.today()]
+            if len(valid_expiries) > 0: expiries_to_process.append(valid_expiries[0])
+            if len(valid_expiries) > 1: expiries_to_process.append(valid_expiries[1])
+            logger.info(f"Nifty Expiries to process: {[d[1] for d in expiries_to_process]}")
+        
+        # Get closest strike from OC
+        options_chain = oc_data.get('optionsChain', [])
+        min_diff = float('inf')
+        for entry in options_chain:
+            strike = entry.get('strike_price')
+            if strike is not None and abs(strike - target_atm_strike) < min_diff:
+                min_diff = abs(strike - target_atm_strike)
+                actual_atm_strike = strike
+        
+        if actual_atm_strike is None: logger.error(f"Could not find ATM strike near {target_atm_strike}."); return False
+        logger.info(f"Identified closest Nifty ATM strike in OC: {actual_atm_strike}")
+    except Exception as e:
+        logger.error(f"Error during Nifty OC fetch/processing: {e}", exc_info=True); return False
+
+    if not expiries_to_process: logger.error("No valid expiries found for Nifty."); return False
+
+    # 3. Look up symbols in master contract file and map them
+    newly_added, symbols_to_save = False, {}
+    with master_data_lock:
+        if nfo_master_df.empty: logger.error("NFO Master DataFrame is empty. Cannot look up symbols."); return False
+        for expiry_date_obj, expiry_date_str in expiries_to_process:
+            for opt_type in ["CE", "PE"]:
+                try:
+                    # THE RELIABLE LOOKUP
+                    contract_row = nfo_master_df.loc[
+                        (nfo_master_df['Underlying symbol'] == base_underlying) &
+                        (nfo_master_df['Expiry date'] == expiry_date_obj) &
+                        (nfo_master_df['Strike price'] == actual_atm_strike) &
+                        (nfo_master_df['Option type'] == opt_type)
+                    ]
+                    if not contract_row.empty:
+                        fyers_symbol = contract_row.iloc[0]['Symbol ticker']
+                        ami_date = expiry_date_obj.strftime("%d%b%y").upper()
+                        ami_symbol = f"{base_underlying}{ami_date}{int(actual_atm_strike)}{opt_type}"
+                        
+                        async with symbol_mapping_lock:
+                            if fyers_symbol not in SYMBOL_MAPPING:
+                                SYMBOL_MAPPING[fyers_symbol] = ami_symbol
+                                symbols_to_save[fyers_symbol] = ami_symbol
+                                newly_added = True
+                                logger.info(f"Added Nifty ({expiry_date_str}): {fyers_symbol} -> {ami_symbol}")
+                    else:
+                        logger.warning(f"Could not find Nifty contract in master file for Strike:{actual_atm_strike}, Expiry:{expiry_date_str}, Type:{opt_type}")
+                except Exception as e:
+                    logger.error(f"Error looking up Nifty symbol for {expiry_date_str} {opt_type}: {e}", exc_info=True)
+
+    if symbols_to_save: save_daily_atm_symbols(symbols_to_save)
+    return newly_added
+
+
+# --- [ Master Contract Download - unchanged ] ---
+async def download_master_contracts():
+    # (Code is identical to previous version - omitted for brevity)
+    global last_master_download_run_date; logger.info("--- Starting Daily Master Contract Download ---"); os.makedirs(MASTER_CONTRACT_PATH, exist_ok=True)
+    urls = { "NSE_FO": "https://public.fyers.in/sym_details/NSE_FO.csv", "MCX_COM": "https://public.fyers.in/sym_details/MCX_COM.csv", }; download_success = True
+    for key, url in urls.items():
+        try:
+            logger.info(f"Downloading {key} from {url}..."); response = await asyncio.get_event_loop().run_in_executor(None, requests.get, url, {'timeout': 30}); response.raise_for_status()
+            file_path = os.path.join(MASTER_CONTRACT_PATH, f"{key}.csv");
+            with open(file_path, 'wb') as f: f.write(response.content)
+            logger.info(f"Successfully downloaded and saved {key}.csv"); await asyncio.sleep(0.5)
+        except requests.exceptions.RequestException as req_err: logger.error(f"Failed to download {key}: {req_err}"); download_success = False
+        except Exception as e: logger.error(f"Unexpected error downloading {key}: {e}"); download_success = False
+    if download_success: logger.info("Master contract downloads completed successfully."); last_master_download_run_date = datetime.date.today()
+    else: logger.error("One or more master contract downloads failed.")
+    logger.info("--- Daily Master Contract Download Finished ---"); return download_success
+
+
+# --- [ Load Master Contracts to DFs - unchanged ] ---
+async def load_master_contracts_to_dfs():
+    # (Code is identical to previous version - omitted for brevity)
+    global nfo_master_df, mcx_master_df, master_data_lock; logger.info("Loading master contracts into DataFrames..."); load_successful = False
+    with master_data_lock:
+        try:
+            nfo_path = os.path.join(MASTER_CONTRACT_PATH, "NSE_FO.csv"); mcx_path = os.path.join(MASTER_CONTRACT_PATH, "MCX_COM.csv"); nfo_loaded = False; mcx_loaded = False
+            if os.path.exists(nfo_path):
+                 nfo_names = ["Fytoken", "Symbol Details", "Exchange Instrument type", "Minimum lot size", "Tick size", "ISIN", "Trading Session", "Last update date", "Expiry date", "Symbol ticker", "Exchange", "Segment", "Scrip code", "Underlying symbol", "Underlying scrip code", "Strike price", "Option type", "Underlying FyToken", "Reserved1", "Reserved2", "Reserved3"]; nfo_dtypes = {'Expiry date': object, 'Fytoken': str, 'Underlying FyToken': str, 'Scrip code': object}
+                 temp_nfo_df = pd.read_csv(nfo_path, header=0, low_memory=False, names=nfo_names, dtype=nfo_dtypes); temp_nfo_df['Expiry date'] = pd.to_numeric(temp_nfo_df['Expiry date'], errors='coerce'); temp_nfo_df['Expiry date'] = pd.to_datetime(temp_nfo_df['Expiry date'], unit='s', errors='coerce').dt.date
+                 nfo_master_df = temp_nfo_df; logger.info(f"Loaded {len(nfo_master_df)} NFO symbols."); nfo_loaded = True
+            else: logger.error(f"NFO master file not found: {nfo_path}"); nfo_master_df = pd.DataFrame()
+            if os.path.exists(mcx_path):
+                 mcx_names = ["Fytoken", "Symbol Details", "Exchange Instrument type", "Minimum lot size", "Tick size", "ISIN", "Trading Session", "Last update date", "Expiry date", "Symbol ticker", "Exchange", "Segment", "Scrip code", "Underlying symbol", "Underlying scrip code", "Strike price", "Option type", "Underlying FyToken", "Reserved1", "Reserved2", "Reserved3"]; mcx_dtypes = {'Expiry date': object, 'Fytoken': str, 'Underlying FyToken': str, 'Scrip code': object}
+                 temp_mcx_df = pd.read_csv(mcx_path, header=0, low_memory=False, names=mcx_names, dtype=mcx_dtypes); temp_mcx_df['Expiry date'] = pd.to_numeric(temp_mcx_df['Expiry date'], errors='coerce'); temp_mcx_df['Expiry date'] = pd.to_datetime(temp_mcx_df['Expiry date'], unit='s', errors='coerce').dt.date
+                 mcx_master_df = temp_mcx_df; logger.info(f"Loaded {len(mcx_master_df)} MCX symbols."); mcx_loaded = True
+            else: logger.error(f"MCX master file not found: {mcx_path}"); mcx_master_df = pd.DataFrame()
+            load_successful = nfo_loaded and mcx_loaded
+        except Exception as e: logger.error(f"Error loading master contracts: {e}", exc_info=True); nfo_master_df = pd.DataFrame(); mcx_master_df = pd.DataFrame(); load_successful = False
+    logger.debug(f"Master data lock released. Load Successful: {load_successful}"); return load_successful
+
+
+# --- [ Futures Rollover - get_actual_expiry_date - unchanged ] ---
+async def get_actual_expiry_date(fyers_symbol):
+    # (Code is identical to previous version - omitted for brevity)
+    global nfo_master_df, mcx_master_df, master_data_lock; df_to_search = pd.DataFrame(); segment = None
+    logger.debug(f"Getting actual expiry for: {fyers_symbol}")
+    if fyers_symbol.startswith("NSE:") or fyers_symbol.startswith("NFO:"): segment = "NFO"; df_to_search = nfo_master_df
+    elif fyers_symbol.startswith("MCX:"): segment = "MCX"; df_to_search = mcx_master_df
+    else: logger.warning(f"Cannot determine segment for expiry lookup: {fyers_symbol}"); return None
+    with master_data_lock:
+        if df_to_search.empty: logger.error(f"Master DataFrame for '{segment}' empty in get_actual_expiry_date."); return None
+        try:
+            contract_row = df_to_search[df_to_search['Symbol ticker'] == fyers_symbol]
+            if contract_row.empty: logger.warning(f"Symbol '{fyers_symbol}' not found in {segment} master data."); return None
+            if len(contract_row) > 1: logger.warning(f"Duplicate symbol '{fyers_symbol}' found. Using first entry.")
+            expiry_date_obj = contract_row.iloc[0]['Expiry date']
+            if pd.isnull(expiry_date_obj) or not isinstance(expiry_date_obj, datetime.date): logger.error(f"Invalid expiry date in master for '{fyers_symbol}'. Found: {expiry_date_obj}"); return None
+            logger.debug(f"Found actual expiry date for '{fyers_symbol}': {expiry_date_obj}")
+            return expiry_date_obj
+        except Exception as e: logger.error(f"Error processing master DF during expiry lookup for {fyers_symbol}: {e}", exc_info=True); return None
+
+# --- [ Futures Rollover - Generate OpenAlgo Format - unchanged ] ---
+def generate_openalgo_future_symbol_with_date(fyers_symbol, actual_expiry_date):
+    # (Code is identical to previous version - omitted for brevity)
+    if not actual_expiry_date or not isinstance(actual_expiry_date, datetime.date): logger.error(f"OpenAlgo Format: Invalid actual_expiry_date for {fyers_symbol}"); return None
+    base_symbol_underlying = None; match_nfo = re.match(r"^(?:NSE|NFO):([A-Z&]+)\d{2}[A-Z]{3}FUT$", fyers_symbol); match_mcx = None
+    if match_nfo: base_symbol_underlying = match_nfo.group(1)
+    else: match_mcx = re.match(r"^MCX:([A-Z]+)\d{2}[A-Z]{3}FUT$", fyers_symbol);
+    if match_mcx: base_symbol_underlying = match_mcx.group(1)
+    if not base_symbol_underlying: logger.error(f"OpenAlgo Format: Could not extract base symbol from '{fyers_symbol}'"); return None
+    try: formatted_date = actual_expiry_date.strftime("%d%b%y").upper(); openalgo_symbol = f"{base_symbol_underlying}{formatted_date}FUT"; logger.debug(f"Generated OpenAlgo symbol '{openalgo_symbol}' for Fyers '{fyers_symbol}'"); return openalgo_symbol
+    except Exception as e: logger.error(f"OpenAlgo Format: Error formatting date {actual_expiry_date} for '{fyers_symbol}': {e}"); return None
+
+
+# --- [ Futures Rollover - Find Active Front Month - unchanged ] ---
+async def find_active_front_month_future(base_symbol_underlying, segment):
+    # (Code is identical to previous version - omitted for brevity)
+    global nfo_master_df, mcx_master_df, master_data_lock; today = datetime.date.today(); df_to_search = pd.DataFrame(); active_fyers_symbol = None
+    logger.debug(f"Finding active front-month for Underlying: '{base_symbol_underlying}', Segment: '{segment}'")
+    if segment == "NFO": df_to_search = nfo_master_df
+    elif segment == "MCX": df_to_search = mcx_master_df
+    else: logger.error(f"Unknown segment '{segment}'"); return None
+    with master_data_lock:
+        if df_to_search.empty: logger.error(f"Master DataFrame for '{segment}' empty."); return None
+        try:
+            futures_df = df_to_search[(df_to_search['Underlying symbol'] == base_symbol_underlying) & (df_to_search['Option type'] == 'XX')].copy()
+            if futures_df.empty: logger.warning(f"No future contracts found for '{base_symbol_underlying}' in {segment}."); return None
+            futures_df.dropna(subset=['Expiry date'], inplace=True); valid_futures = futures_df[futures_df['Expiry date'] >= today]
+            if valid_futures.empty: logger.warning(f"No UNEXPIRED future contracts found for {base_symbol_underlying} in {segment}."); return None
+            front_month_expiry_date = valid_futures['Expiry date'].min(); logger.debug(f"Identified front-month expiry date: {front_month_expiry_date}")
+            front_month_rows = valid_futures[valid_futures['Expiry date'] == front_month_expiry_date]; num_matches = len(front_month_rows)
+            if num_matches == 0: logger.error(f"Internal Consistency Error finding row for expiry {front_month_expiry_date}"); return None
+            elif num_matches >= 1:
+                active_fyers_symbol = front_month_rows.iloc[0]['Symbol ticker'] # Pick first one
+                if num_matches > 1: logger.warning(f"Ambiguous Data: {num_matches} contracts share expiry {front_month_expiry_date}. Selecting first: '{active_fyers_symbol}'.")
+                else: logger.info(f"Found unique active front-month: '{active_fyers_symbol}'")
+        except Exception as e: logger.error(f"Error processing master DF for {segment}/{base_symbol_underlying}: {e}", exc_info=True); return None
+    return active_fyers_symbol
+
+
+# --- [ Futures Rollover - check_and_rollover_futures - unchanged ] ---
+async def check_and_rollover_futures():
+    # (Code is identical to previous version - omitted for brevity)
+    global SYMBOL_MAPPING, symbol_mapping_lock, last_rollover_check_run_date; logger.info("--- Running Daily Futures Rollover Check ---"); needs_resubscribe = False; map_updated = False; temp_new_mapping = {}; processed_placeholders = set(); run_successful = False
+    try:
+        async with symbol_mapping_lock: current_mapping = SYMBOL_MAPPING.copy()
+        placeholders_to_check = {}
+        for fyers_key, ami_value in current_mapping.items():
+            if isinstance(ami_value, str) and ami_value.endswith(FUTURES_SUFFIX): placeholders_to_check[ami_value] = fyers_key
+        for ami_placeholder, current_fyers_key in placeholders_to_check.items():
+            base_name = ami_placeholder[:-len(FUTURES_SUFFIX)]; segment = "NFO" if current_fyers_key.startswith(("NSE:", "NFO:")) else "MCX" if current_fyers_key.startswith("MCX:") else None
+            if not segment: logger.error(f"Rollover: Cannot determine segment for {current_fyers_key}. Skipping."); temp_new_mapping[current_fyers_key] = ami_placeholder; processed_placeholders.add(ami_placeholder); continue
+            logger.debug(f"Rollover Check: '{ami_placeholder}' (Base: '{base_name}', Key: '{current_fyers_key}')")
+            active_front_month_fyers = await find_active_front_month_future(base_name, segment)
+            if active_front_month_fyers:
+                 active_expiry_date = await get_actual_expiry_date(active_front_month_fyers)
+                 correct_openalgo_ami_symbol = generate_openalgo_future_symbol_with_date(active_front_month_fyers, active_expiry_date)
+                 if active_front_month_fyers != current_fyers_key:
+                     logger.warning(f"ROLLOVER DETECTED for '{ami_placeholder}': Active is '{active_front_month_fyers}'")
+                     if correct_openalgo_ami_symbol: logger.warning(f"  Updating mapping: NEW '{active_front_month_fyers}' -> '{correct_openalgo_ami_symbol}'."); temp_new_mapping[active_front_month_fyers] = correct_openalgo_ami_symbol; needs_resubscribe = True; map_updated = True
+                     else: logger.error(f"  Rollover FAILED: Cannot generate AB symbol for '{active_front_month_fyers}'. Keeping old."); temp_new_mapping[current_fyers_key] = ami_placeholder
+                 else:
+                     logger.debug(f"Rollover Check: '{current_fyers_key}' is still active. Verifying AB format...")
+                     if correct_openalgo_ami_symbol:
+                         temp_new_mapping[current_fyers_key] = correct_openalgo_ami_symbol
+                         if current_mapping.get(current_fyers_key) != correct_openalgo_ami_symbol: logger.info(f"  Corrected AB Symbol Format: -> '{correct_openalgo_ami_symbol}'"); map_updated = True
+                     else: logger.error(f"Could not generate correct AB symbol for '{current_fyers_key}'. Keeping '{ami_placeholder}'."); temp_new_mapping[current_fyers_key] = ami_placeholder
+            else: logger.error(f"Rollover Check: Could not find active future for '{base_name}'. Keeping '{current_fyers_key}' -> '{ami_placeholder}'."); temp_new_mapping[current_fyers_key] = ami_placeholder
+            processed_placeholders.add(ami_placeholder)
+        for fyers_key, ami_value in current_mapping.items():
+             if not (isinstance(ami_value, str) and ami_value.endswith(FUTURES_SUFFIX)):
+                  if fyers_key not in temp_new_mapping: temp_new_mapping[fyers_key] = ami_value
+        final_update_needed = False
+        async with symbol_mapping_lock:
+            if SYMBOL_MAPPING != temp_new_mapping: logger.warning("Global SYMBOL_MAPPING updated by rollover check."); SYMBOL_MAPPING = temp_new_mapping; logger.info(f"New SYMBOL_MAPPING: {SYMBOL_MAPPING}"); final_update_needed = True
+            elif map_updated: logger.info("Rollover check updated AB values but not Fyers keys."); final_update_needed = True
+            else: logger.info("No rollover needed or map already correct.")
+        run_successful = True
+    finally:
+        if run_successful: last_rollover_check_run_date = datetime.date.today(); logger.info(f"Rollover check marked as run for today ({last_rollover_check_run_date}).")
+        else: logger.error("Rollover check did not complete successfully.")
+        if needs_resubscribe: logger.warning("Rollover requires re-subscription.")
+        logger.info("--- Daily Futures Rollover Check Complete ---")
+        return needs_resubscribe
+
+
+# --- [ Daily Scheduler Task - unchanged ] ---
+async def daily_scheduler():
+    # (Code is identical to previous version - omitted for brevity)
+    global last_atm_selection_run_date, last_rollover_check_run_date, last_master_download_run_date
+    global SYMBOL_MAPPING, symbol_mapping_lock, fyers_ws_client, fyers_connection_status, resubscribe_event
+    logger.info(f"Daily Scheduler Task Started.")
+    last_known_mapping_keys = set()
+    async with symbol_mapping_lock:
+         last_known_mapping_keys = set(SYMBOL_MAPPING.keys())
+    while True:
+        try:
+            now_dt_local = datetime.datetime.now(pytz.timezone('Asia/Kolkata'))
+            now_time = now_dt_local.time()
+            today_date = now_dt_local.date()
+            mapping_keys_changed_this_cycle = False
+            try: download_hms = [int(x) for x in MASTER_DOWNLOAD_TIME_STR.split(':')]; download_run_time = datetime.time(download_hms[0], download_hms[1], download_hms[2])
+            except ValueError: logger.error(f"Invalid MASTER_DOWNLOAD_TIME_STR: '{MASTER_DOWNLOAD_TIME_STR}'. Using default 08:50:00."); download_hms = [8, 50, 0]; download_run_time = datetime.time(8, 50, 0)
+            try: rollover_hms = [int(x) for x in ROLLOVER_CHECK_TIME_STR.split(':')]; rollover_run_time = datetime.time(rollover_hms[0], rollover_hms[1], rollover_hms[2])
+            except ValueError: logger.error(f"Invalid ROLLOVER_CHECK_TIME_STR: '{ROLLOVER_CHECK_TIME_STR}'. Using default 08:55:00."); rollover_hms = [8, 55, 0]; rollover_run_time = datetime.time(8, 55, 0)
+            try: atm_hms = [int(x) for x in ATM_SELECTION_TIME_STR.split(':')]; atm_run_time = datetime.time(atm_hms[0], atm_hms[1], atm_hms[2])
+            except ValueError: logger.error(f"Invalid ATM_SELECTION_TIME_STR: '{ATM_SELECTION_TIME_STR}'. Using default 09:15:06."); atm_hms = [9, 15, 6]; atm_run_time = datetime.time(9, 15, 6)
+            # Master Contract Download
+            if now_time >= download_run_time and last_master_download_run_date < today_date:
+                logger.warning(f"Running scheduled Master Contract Download (~{download_run_time}).")
+                try:
+                    download_ok = await download_master_contracts()
+                    if download_ok: await load_master_contracts_to_dfs()
+                except Exception as dl_err: logger.error(f"Error during scheduled download/load: {dl_err}", exc_info=True)
+                await asyncio.sleep(5)
+            # Rollover Check
+            if now_time >= rollover_run_time and last_rollover_check_run_date < today_date:
+                if last_master_download_run_date == today_date:
+                    logger.warning(f"Running scheduled Rollover Check (~{rollover_run_time}).")
+                    try:
+                        if await check_and_rollover_futures(): mapping_keys_changed_this_cycle = True
+                    except Exception as roll_err: logger.error(f"Error during scheduled rollover: {roll_err}", exc_info=True)
+                    await asyncio.sleep(5)
+                else: logger.warning(f"Rollover time reached, but masters not downloaded today ({last_master_download_run_date}).")
+            # ATM Selections
+            if now_time >= atm_run_time and last_atm_selection_run_date < today_date:
+                logger.warning(f"Running scheduled ATM Selection (~{atm_run_time}).")
+                atm_success = True; any_added = False
+                try:
+                    logger.info("--- Running BankNifty ATM Selection (Nearest + Next Expiry) ---"); bn_changed = await select_and_subscribe_banknifty_atm();
+                    if bn_changed: any_added = True
+                    await asyncio.sleep(1); logger.info("--- Running Nifty Weekly ATM Selection (Nearest + Next Expiry) ---"); nf_changed = await select_and_subscribe_nifty_weekly_atm();
+                    if nf_changed: any_added = True
+                    if any_added: mapping_keys_changed_this_cycle = True; logger.info("ATM selection added new symbols.")
+                    else: logger.info("ATM selection ran, no new symbols added.")
+                    logger.warning("--- ATM Selection Complete ---")
+                except Exception as atm_err: logger.error(f"Error during ATM sequence: {atm_err}", exc_info=True); atm_success = False
+                if atm_success: last_atm_selection_run_date = today_date; logger.info(f"ATM selection marked run for today ({today_date}).")
+                await asyncio.sleep(10)
+            # Consolidated Re-subscription Check
+            if mapping_keys_changed_this_cycle:
+                 logger.info("Mapping keys potentially changed. Checking for re-subscribe.")
+                 current_keys = set()
+                 async with symbol_mapping_lock:
+                      current_keys = set(SYMBOL_MAPPING.keys())
+                 if current_keys != last_known_mapping_keys:
+                     logger.warning(f"Symbol list changed (New: {len(current_keys)}, Old: {len(last_known_mapping_keys)}). Signaling re-subscribe.")
+                     fyers_connection_status["subscribed"] = False # Mark as unsubscribed
+                     if fyers_ws_client and fyers_connection_status["connected"]:
+                         resubscribe_event.set()
+                     else:
+                         logger.warning("Symbol list changed, but WS is not connected. Subscription will occur on next connect.")
+                     last_known_mapping_keys = current_keys
+                 else:
+                     logger.info("Mapping values updated, but keys unchanged. No re-subscribe needed now.")
+                 mapping_keys_changed_this_cycle = False
+            # Calculate Sleep Time
+            next_dl = now_dt_local.replace(hour=download_hms[0], minute=download_hms[1], second=download_hms[2], microsecond=0); next_roll = now_dt_local.replace(hour=rollover_hms[0], minute=rollover_hms[1], second=rollover_hms[2], microsecond=0); next_atm = now_dt_local.replace(hour=atm_hms[0], minute=atm_hms[1], second=atm_hms[2], microsecond=0)
+            if now_time >= download_run_time or last_master_download_run_date >= today_date: next_dl += datetime.timedelta(days=1)
+            if now_time >= rollover_run_time or last_rollover_check_run_date >= today_date: next_roll += datetime.timedelta(days=1)
+            if now_time >= atm_run_time or last_atm_selection_run_date >= today_date: next_atm += datetime.timedelta(days=1)
+            next_run = min(next_dl, next_roll, next_atm); sleep = max(1, (next_run - now_dt_local).total_seconds())
+            logger.info(f"Daily Scheduler: Next event check at {next_run:%Y-%m-%d %H:%M:%S %Z}. Sleeping {sleep:.1f}s."); await asyncio.sleep(sleep)
+        except asyncio.CancelledError: logger.info("Daily Scheduler task cancelled."); break
+        except Exception as e: logger.error(f"Error in Daily Scheduler loop: {e}", exc_info=True); await asyncio.sleep(300)
+
+
+# --- [ Initial Symbol Correction Function - MODIFIED FOR AUTO-ADD ] ---
+async def correct_initial_symbols():
+    global SYMBOL_MAPPING, symbol_mapping_lock, bar_queue
+    logger.info("--- Correcting Initial Symbol Mapping Placeholders ---")
+    needs_update = False
+    temp_mapping = {}
+    
+    async with symbol_mapping_lock:
+        initial_mapping = SYMBOL_MAPPING.copy()
+        
+    placeholders_to_correct = {}
+    for fyers_key, ami_value in initial_mapping.items():
+        if isinstance(ami_value, str) and ami_value.endswith(FUTURES_SUFFIX):
+             placeholders_to_correct[ami_value] = fyers_key # ami_placeholder -> original_fyers_key
+        else:
+             temp_mapping[fyers_key] = ami_value # Keep non-futures directly
+
+    for ami_placeholder, original_fyers_key in placeholders_to_correct.items():
+        base_name = ami_placeholder[:-len(FUTURES_SUFFIX)]
+        segment = "NFO" if original_fyers_key.startswith(("NSE:", "NFO:")) else "MCX" if original_fyers_key.startswith("MCX:") else None
+        logger.info(f"Initial Check: Found placeholder '{ami_placeholder}' (Base: '{base_name}', Segment: '{segment}', Original Key: '{original_fyers_key}')")
+        
+        if segment:
+            active_fyers_symbol = await find_active_front_month_future(base_name, segment)
+            if active_fyers_symbol:
+                active_expiry_date = await get_actual_expiry_date(active_fyers_symbol)
+                correct_openalgo_ami_symbol = generate_openalgo_future_symbol_with_date(active_fyers_symbol, active_expiry_date)
+                
+                if correct_openalgo_ami_symbol:
+                    if active_fyers_symbol != original_fyers_key:
+                        logger.warning(f"  Initial Correction: Active symbol '{active_fyers_symbol}' differs from placeholder key '{original_fyers_key}'.")
+                        logger.warning(f"  Updating Initial Mapping: NEW '{active_fyers_symbol}' -> '{correct_openalgo_ami_symbol}' (Replacing '{original_fyers_key}')")
+                        temp_mapping[active_fyers_symbol] = correct_openalgo_ami_symbol
+                        needs_update = True
+                        
+                        # --- NEW CODE: PROACTIVELY ADD SYMBOL TO AMIBROKER ---
+                        logger.warning(f"  >>> Proactively queuing new symbol '{correct_openalgo_ami_symbol}' for AmiBroker discovery <<<")
+                        dummy_bar_data = {
+                            'timestamp': datetime.datetime.now(),
+                            'open': 0, 'high': 0, 'low': 0, 'close': 0, 'volume': 0
+                        }
+                        await queue_bar_snapshot(correct_openalgo_ami_symbol, dummy_bar_data, is_final_bar=True)
+                        # --- END NEW CODE ---
+                        
+                    else:
+                        logger.debug(f"  Initial Check: Key '{active_fyers_symbol}' matches active symbol. Ensuring AB format is '{correct_openalgo_ami_symbol}'.")
+                        temp_mapping[active_fyers_symbol] = correct_openalgo_ami_symbol
+                        if initial_mapping.get(active_fyers_symbol) != correct_openalgo_ami_symbol:
+                            needs_update = True
+                else:
+                    logger.error(f"  Initial Correction Failed: Could not generate AB symbol for active '{active_fyers_symbol}'. Keeping original.")
+                    temp_mapping[original_fyers_key] = ami_placeholder
+            else:
+                logger.error(f"  Initial Check Error: Could not find active front-month for '{base_name}'. Keeping original.")
+                temp_mapping[original_fyers_key] = ami_placeholder
+        else:
+            logger.error(f"  Initial Check Error: Cannot determine segment for key '{original_fyers_key}'. Keeping original.")
+            temp_mapping[original_fyers_key] = ami_placeholder
+            
+    if needs_update:
+        async with symbol_mapping_lock:
+            SYMBOL_MAPPING = temp_mapping
+            logger.warning("Global SYMBOL_MAPPING updated after initial correction.")
+    else:
+        logger.info("Initial symbol mapping required no corrections.")
+        
+    logger.info(f"--- Initial Symbol Correction Complete --- Final Initial Map: {SYMBOL_MAPPING}")
+
+
+# --- [ Main Manager - connect_and_manage - DEFINITIVE FIX ] ---
+async def connect_and_manage():
+    global fyers_api_client, SYMBOL_MAPPING, symbol_mapping_lock, fyers_ws_client, fyers_connection_status, main_event_loop, last_atm_selection_run_date
+    main_event_loop = asyncio.get_running_loop()
+    access_token = None
+    fyers_thread = None
+
+    # --- Perform Login First ---
+    try:
+        access_token = perform_fyers_login()
+        if not access_token:
+            logger.critical("Fyers login failed. Cannot proceed. Check .env file and Auth Code.")
+            await asyncio.sleep(10)
+            return
+        # --- Initialize FyersModel REST API Client ---
+        try:
+            fyers_api_client = fyersModel.FyersModel(client_id=FYERS_APP_ID, token=access_token, log_path=FYERS_LOG_PATH)
+            logger.info("Fyers REST API client initialized successfully.")
+            profile_info = fyers_api_client.get_profile()
+            if profile_info.get("s") == "ok":
+                 logger.info(f"REST API check successful. Logged in as: {profile_info.get('data', {}).get('fy_id', 'N/A')}")
+            else:
+                 logger.warning(f"REST API check failed: {profile_info.get('message', 'Unknown error')}")
+        except Exception as api_init_err:
+            logger.critical(f"Failed to initialize Fyers REST API client after login: {api_init_err}", exc_info=True)
+            fyers_api_client = None
+            logger.warning("Proceeding without REST API Client capabilities (History/ATM/Rollover will fail)!")
+    except Exception as login_err:
+        logger.critical(f"An unexpected error occurred during the login phase: {login_err}", exc_info=True)
+        return
+
+    # --- Proceed with Setup only if Login was successful ---
+    logger.info("Login successful, proceeding with application setup...")
+    logger.info("Performing initial master contract download and load...")
+    dl_ok = await download_master_contracts()
+    if not dl_ok: logger.critical("Failed initial master contract download. Exiting."); return
+    
+    load_ok = await load_master_contracts_to_dfs()
+    if not load_ok: logger.critical("Failed initial master contract load. Exiting."); return
+
+    logger.info("Initial master contract load complete.")
+    await correct_initial_symbols()
+    
+    # --- FINAL, ROBUST ATM LOGIC ---
+    logger.info("--- Initializing ATM Symbol Logic ---")
+    now_dt_local = datetime.datetime.now(pytz.timezone('Asia/Kolkata'))
+    today_date = now_dt_local.date()
+
+    # Try to load symbols from file first
+    saved_atm_symbols = load_daily_atm_symbols()
+    if saved_atm_symbols:
+        async with symbol_mapping_lock:
+            SYMBOL_MAPPING.update(saved_atm_symbols)
+        logger.info(f"Loaded {len(saved_atm_symbols)} ATM symbols from today's file.")
+        # Mark as run for today so the scheduler doesn't run it again.
+        last_atm_selection_run_date = today_date
+        logger.info("ATM selection is considered complete for today (loaded from file).")
+    else:
+        # No file exists for today. Check if we should run the selection now or let the scheduler handle it.
+        logger.info("No saved ATM symbol file found for today.")
+        atm_hms = [int(x) for x in ATM_SELECTION_TIME_STR.split(':')]
+        atm_run_time = datetime.time(atm_hms[0], atm_hms[1], atm_hms[2])
+        
+        if now_dt_local.time() >= atm_run_time:
+            logger.warning(f"Running initial ATM selection as it's past {atm_run_time} and no file was found.")
+            try:
+                logger.info("--- Running BankNifty ATM Selection (Nearest + Next Expiry) ---")
+                await select_and_subscribe_banknifty_atm()
+                await asyncio.sleep(1.5) # Increased delay for API safety
+                logger.info("--- Running Nifty Weekly ATM Selection (Nearest + Next Expiry) ---")
+                await select_and_subscribe_nifty_weekly_atm()
+                logger.warning("--- Initial ATM Selection Complete ---")
+                # Mark as run for today so the scheduler doesn't run it again
+                last_atm_selection_run_date = today_date
+            except Exception as atm_err:
+                logger.error(f"Error during initial ATM sequence: {atm_err}", exc_info=True)
+        else:
+            logger.info(f"It is before ATM selection time ({atm_run_time}). The scheduler will run it later.")
+            # We do NOT set last_atm_selection_run_date, so the scheduler knows it still needs to run.
+
+    logger.info(f"Final SYMBOL_MAPPING before starting WS: {SYMBOL_MAPPING}")
+    cleanup_old_atm_files()
+
+    # --- Start Fyers WebSocket Thread ---
+    fyers_thread = Thread(target=run_fyers_thread, args=(access_token, FYERS_APP_ID), daemon=True, name="FyersWSThread")
+    fyers_thread.start()
+    logger.info("Fyers WS thread started.")
+
+    # --- Start Core Async Tasks ---
+    process_task = asyncio.create_task(process_fyers_messages(), name="MsgProcessor")
+    daily_schedule_task = asyncio.create_task(daily_scheduler(), name="DailyScheduler")
+    subscription_handler_task = asyncio.create_task(handle_subscriptions(), name="SubscriptionHandler")
+    core_tasks = {process_task, daily_schedule_task, subscription_handler_task}
+    logger.info("Core async tasks (MsgProcessor, DailyScheduler, SubscriptionHandler) started.")
+
+    # --- Main Loop: Connect Relay & Manage Tasks ---
+    # (Rest of the function is unchanged)
+    while True:
+        websocket = None; send_task = None; recv_task = None; relay_tasks = set()
+        try:
+            logger.info(f"Connecting relay {RELAY_SERVER_URI}...")
+            async with websockets.connect(RELAY_SERVER_URI, max_size=RELAY_MAX_SIZE, ping_interval=20, ping_timeout=20) as websocket:
+                logger.info(">>> Connected Relay <<<"); await websocket.send("rolesend"); logger.info("Sent 'rolesend'.")
+                send_task = asyncio.create_task(send_rtd_to_relay(websocket), name="RTDSender"); recv_task = asyncio.create_task(receive_commands_from_relay(websocket), name="CommandReceiver"); relay_tasks = {send_task, recv_task}
+                all_monitored_tasks = core_tasks.union(relay_tasks)
+                done, pending = await asyncio.wait(all_monitored_tasks, return_when=asyncio.FIRST_COMPLETED)
+                exit_app = False
+                for task in done:
+                    task_name = task.get_name();
+                    try: task.result(); logger.info(f"Task '{task_name}' completed.")
+                    except asyncio.CancelledError: logger.info(f"Task '{task_name}' cancelled.")
+                    except websockets.ConnectionClosed as cc: logger.warning(f"Task '{task_name}' finished: WS Closed Code={cc.code}")
+                    except Exception as task_ex: logger.error(f"Task '{task_name}' failed: {task_ex}", exc_info=True)
+                    if task in core_tasks:
+                        logger.critical(f"!!! Core task '{task_name}' stopped !!! Exiting application.")
+                        core_tasks.discard(task)
+                        exit_app = True
+                        break
+                if exit_app:
+                     logger.critical("Exiting main loop due to core task failure.")
+                     break
+                if any(t in done for t in relay_tasks):
+                    logger.warning("Relay task completed or failed. Will attempt to reconnect relay.")
+                    relay_tasks.difference_update(done)
+        except (websockets.exceptions.ConnectionClosedError, websockets.exceptions.ConnectionClosedOK) as cc_err: logger.error(f"Relay conn closed: {cc_err}")
+        except ConnectionRefusedError: logger.error(f"Relay REFUSED ({RELAY_SERVER_URI}). Is relay server running?")
+        except websockets.exceptions.InvalidURI: logger.critical(f"Invalid Relay URI: {RELAY_SERVER_URI}. Exiting."); break
+        except asyncio.TimeoutError: logger.error(f"Timeout connect relay {RELAY_SERVER_URI}.")
+        except OSError as os_err: logger.error(f"OS Error connect relay: {os_err}")
+        except Exception as e: logger.error(f"Relay connect/manage error: {e}", exc_info=True)
+        finally:
+            logger.debug("Relay connection loop end/reconnect preparation.")
+            tasks_to_cancel = [t for t in relay_tasks if t and not t.done()]
+            if tasks_to_cancel:
+                logger.info(f"Cancelling {len(tasks_to_cancel)} remaining relay tasks before reconnect.")
+                for task in tasks_to_cancel: task.cancel()
+                await asyncio.gather(*tasks_to_cancel, return_exceptions=True)
+            if not core_tasks:
+                logger.critical("No core tasks running after relay loop. Exiting main loop.")
+                break
+            if not fyers_thread or not fyers_thread.is_alive():
+                 logger.critical("Fyers WS thread is not alive. Exiting main loop.")
+                 break
+            logger.info(f"*** Retrying Relay connection in {RECONNECT_DELAY}s... ***")
+            await asyncio.sleep(RECONNECT_DELAY)
+    # --- Final Cleanup ---
+    logger.info("Main application loop exited. Performing final cleanup...")
+    loop = asyncio.get_running_loop()
+    if fyers_ws_client:
+        logger.info("Attempting to disconnect Fyers WebSocket client...")
+        try:
+             if hasattr(fyers_ws_client, 'stop_websocket'):
+                  fyers_ws_client.stop_websocket(True)
+                  logger.info("Called Fyers WS client stop method.")
+        except Exception as ws_close_err:
+            logger.error(f"Error trying to stop Fyers WebSocket client: {ws_close_err}")
+    all_tasks = asyncio.all_tasks(loop=loop)
+    current_task = asyncio.current_task(loop=loop)
+    tasks_to_cancel = [t for t in all_tasks if t is not current_task and not t.done()]
+    if tasks_to_cancel:
+        logger.info(f"Cancelling {len(tasks_to_cancel)} remaining asyncio tasks...")
+        for task in tasks_to_cancel: task.cancel()
+        await asyncio.gather(*tasks_to_cancel, return_exceptions=True)
+        logger.info("Remaining asyncio tasks cancelled.")
+    else:
+        logger.info("No remaining asyncio tasks to cancel.")
+    logger.info("Application cleanup complete.")
+
+
+# --- [ Main Execution Block (Reflects .env usage) ] ---
+if __name__ == "__main__":
+    # Create directories if they don't exist
+    try: os.makedirs(MASTER_CONTRACT_PATH, exist_ok=True); os.makedirs(FYERS_LOG_PATH, exist_ok=True)
+    except Exception as dir_err: print(f"WARN: Log/Contract dir creation failed: {dir_err}")
+
+    # Configure logger level
+    logger.setLevel(logging.INFO); # Change to logging.DEBUG for more detail
+    if logger.level == logging.DEBUG: print("!!! DEBUG logging enabled !!!")
+
+    # Print startup information
+    print("\n"+"="*60)
+    print(f"  Starting Fyers Client (v47 Base + Persistent ATM v6 + Direct Login via .env)")
+    # Display status of loaded credentials (without revealing secrets)
+    print(f"  Credentials Loaded from .env:")
+    print(f"    FYERS_APP_ID: {'OK' if FYERS_APP_ID else '!!! MISSING !!!'}")
+    print(f"    FYERS_SECRET_KEY: {'OK' if FYERS_SECRET_KEY else '!!! MISSING !!!'}")
+    print(f"    FYERS_REDIRECT_URI: {'OK' if FYERS_REDIRECT_URI else '!!! MISSING !!!'}")
+    auth_code_status = '!!! MISSING !!!'
+    if FYERS_AUTH_CODE:
+        auth_code_status = f"Provided (ends '****{FYERS_AUTH_CODE[-4:]}')" if len(FYERS_AUTH_CODE) >= 4 else "Provided (Too short?)"
+    print(f"    FYERS_AUTH_CODE: {auth_code_status}")
+    print(f"  Relay Server Target: {RELAY_SERVER_URI}")
+    print(f"  Log Path: {FYERS_LOG_PATH}")
+    print(f"  Master Contract Path: {MASTER_CONTRACT_PATH}")
+    print(f"  Max WebSocket Msg Size: {RELAY_MAX_SIZE / (1024*1024):.1f} MiB")
+    print(f"  Initial Symbol Map Size: {len(SYMBOL_MAPPING)}") # Show count instead of full map
+    print(f"  Master DL: {MASTER_DOWNLOAD_TIME_STR} | Rollover: {ROLLOVER_CHECK_TIME_STR} | ATM: {ATM_SELECTION_TIME_STR}")
+    print( "  Press Ctrl+C to exit");
+    print("="*60+"\n")
+
+    # Pre-run check for essential credentials loaded from .env
+    if not all([FYERS_APP_ID, FYERS_SECRET_KEY, FYERS_REDIRECT_URI, FYERS_AUTH_CODE]):
+        logger.critical("CRITICAL: One or more required variables missing from .env file.")
+        print("\nERROR: Essential credentials not found in .env file. Please check the file and its contents.\n")
+    else:
+        # Run the main asynchronous function
+        try:
+            asyncio.run(connect_and_manage())
+        except KeyboardInterrupt:
+            print("\nKeyboardInterrupt detected..."); logger.info("Shutdown initiated by KeyboardInterrupt.")
+        except Exception as main_ex:
+            logger.critical(f"Critical error in main execution: {main_ex}", exc_info=True)
+            print(f"CRITICAL ERROR: {main_ex}")
+
+        # Final message
+        finally:
+            # This code will run whether the try block completes successfully,
+            # encounters an exception, or is interrupted.
+            print("Fyers client stopped.")
+            logger.info("=== Fyers client process finished. ===")

@@ -1,0 +1,10 @@
+{
+  "server": "localhost",
+  "port": 5000,
+  "websocket_url": "ws://localhost:5000/ws",
+  "api_key": "89cd257b0bee93f6798130ca99d487a7641a994b567c7646a96775d6c1d425f0",
+  "use_threading": true,
+  "connection_timeout": 5000,
+  "retry_attempts": 3,
+  "quote_cache_ttl": 1000
+}

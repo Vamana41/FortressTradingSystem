@@ -1,0 +1,10 @@
+{
+  "server": "127.0.0.1",
+  "port": 5000,
+  "websocket_url": "ws://127.0.0.1:8765",
+  "api_key": "471c8eb891d229cc2816da27deabf6fd6cc019107dbf6fcd8c756d151c877371",
+  "use_threading": true,
+  "connection_timeout": 5000,
+  "retry_attempts": 3,
+  "quote_cache_ttl": 1000
+}

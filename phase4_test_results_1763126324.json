@@ -1,0 +1,25 @@
+{
+  "timestamp": "2025-11-14T18:48:42.660501",
+  "paper_trading": true,
+  "tests_run": [],
+  "tests_passed": 0,
+  "tests_failed": 0,
+  "performance_results": {},
+  "recommendations": [],
+  "health_check": {
+    "openalgo": [
+      false,
+      "OpenAlgo connection failed: HTTPConnectionPool(host='127.0.0.1', port=5000): Max retries exceeded with url: /api/v1/funds (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000000004453DD0>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))"
+    ],
+    "zmq_bus": [
+      false,
+      "ZMQ message not received within timeout"
+    ],
+    "execution_bridge": [
+      true,
+      "Execution Bridge appears to be running"
+    ]
+  },
+  "status": "FAILED",
+  "failure_reason": "Component health check failed"
+}

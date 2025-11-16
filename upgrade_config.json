@@ -1,0 +1,34 @@
+{
+  "auto_upgrade": true,
+  "check_interval_hours": 6,
+  "backup_before_upgrade": true,
+  "compatibility_check": true,
+  "rollback_on_failure": true,
+  "notify_on_upgrade": true,
+  "last_check": null,
+  "last_upgrade": null,
+  "compatibility_matrix": {
+    "fortress_version": "1.0.0",
+    "supported_openalgo_versions": [
+      ">=1.0.0"
+    ],
+    "critical_api_endpoints": [
+      "/api/v1/funds",
+      "/api/v1/orderbook",
+      "/api/v1/positionbook",
+      "/api/v1/placeorder",
+      "/api/v1/modifyorder",
+      "/api/v1/cancelorder",
+      "/api/v1/holdings",
+      "/api/v1/tradebook",
+      "/api/v1/history",
+      "/api/v1/quotes",
+      "/api/v1/depth",
+      "/api/v1/search",
+      "/api/v1/symbol",
+      "/api/v1/expiry",
+      "/api/v1/latency",
+      "/api/v1/ping"
+    ]
+  }
+}
