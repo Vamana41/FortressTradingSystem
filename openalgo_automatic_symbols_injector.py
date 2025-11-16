@@ -55,14 +55,14 @@ class OpenAlgoCorrectedInjector:
         self.base_url = OPENALGO_BASE_URL
         self.symbol_mapping = COMPLETE_SYMBOL_MAPPING.copy()
         self.atm_symbols = []
-        
+
     def test_connection(self) -> bool:
         """Test connection to OpenAlgo using correct POST endpoint"""
         try:
             # Debug: Log the actual request details
             logger.info(f"Testing connection to: {self.base_url}/quotes")
             logger.info(f"Using API key: {self.api_key[:10]}...")
-            
+
             # Test with quotes endpoint using POST
             url = f"{self.base_url}/quotes"
             payload = {
@@ -71,12 +71,12 @@ class OpenAlgoCorrectedInjector:
                 'symbol': 'SBIN'
             }
             logger.info(f"Request payload: {payload}")
-            
+
             response = requests.post(url, json=payload)
             logger.info(f"Response status: {response.status_code}")
             logger.info(f"Response headers: {dict(response.headers)}")
             logger.info(f"Response text preview: {response.text[:200]}...")
-            
+
             if response.status_code == 200:
                 data = response.json()
                 if data.get("status") == "success":
@@ -90,13 +90,13 @@ class OpenAlgoCorrectedInjector:
                 return False
             else:
                 logger.warning(f"Quotes HTTP {response.status_code}: {response.text}")
-            
+
             return False
-            
+
         except Exception as e:
             logger.error(f"Connection test failed: {e}")
             return False
-    
+
     def get_quote(self, symbol: str) -> Optional[float]:
         """Get current quote using correct POST endpoint"""
         try:
@@ -107,7 +107,7 @@ class OpenAlgoCorrectedInjector:
                 'symbol': symbol
             }
             response = requests.post(url, json=payload)
-            
+
             if response.status_code == 200:
                 data = response.json()
                 if data.get("status") == "success":
@@ -122,11 +122,11 @@ class OpenAlgoCorrectedInjector:
             else:
                 logger.error(f"HTTP {response.status_code} error for {symbol}: {response.text}")
                 return None
-                
+
         except Exception as e:
             logger.error(f"Error getting quote for {symbol}: {e}")
             return None
-    
+
     def select_atm_strikes(self, index_price: float, strike_interval: int) -> List[int]:
         """Select ATM strikes based on index price"""
         atm_strike = round(index_price / strike_interval) * strike_interval
@@ -134,59 +134,59 @@ class OpenAlgoCorrectedInjector:
         for i in range(-OPTION_CHAIN_STRIKE_COUNT, OPTION_CHAIN_STRIKE_COUNT + 1):
             strikes.append(atm_strike + (i * strike_interval))
         return strikes
-    
+
     def format_option_symbol(self, underlying: str, expiry: str, strike: int, option_type: str) -> str:
         """Format option symbol in AmiBroker format"""
         # Convert expiry from YYYY-MM-DD to DDMMMYY format
         expiry_date = datetime.datetime.strptime(expiry, "%Y-%m-%d")
         expiry_str = expiry_date.strftime("%d%b%y").upper()
-        
+
         # Format: NIFTY17JAN2519500CE
         return f"{underlying}{expiry_str}{strike}{option_type}"
-    
+
     def select_atm_options(self) -> List[str]:
         """Select ATM options for Nifty and BankNifty"""
         atm_symbols = []
-        
+
         try:
             logger.info("Starting automatic ATM option selection...")
-            
+
             # Get Nifty ATM options
             nifty_ltp = self.get_quote(NIFTY_INDEX_SYMBOL)
             if nifty_ltp:
                 nifty_strikes = self.select_atm_strikes(nifty_ltp, NIFTY_STRIKE_INTERVAL)
                 # Use current date + 7 days for weekly expiry
                 expiry_date = (datetime.datetime.now() + datetime.timedelta(days=7)).strftime("%Y-%m-%d")
-                
+
                 for strike in nifty_strikes:
                     for option_type in ["CE", "PE"]:
                         symbol = self.format_option_symbol("NIFTY", expiry_date, strike, option_type)
                         atm_symbols.append(symbol)
                         logger.info(f"Auto-selected Nifty ATM: {symbol}")
-            
+
             # Get BankNifty ATM options
             banknifty_ltp = self.get_quote(BANKNIFTY_INDEX_SYMBOL)
             if banknifty_ltp:
                 banknifty_strikes = self.select_atm_strikes(banknifty_ltp, BANKNIFTY_STRIKE_INTERVAL)
                 expiry_date = (datetime.datetime.now() + datetime.timedelta(days=7)).strftime("%Y-%m-%d")
-                
+
                 for strike in banknifty_strikes:
                     for option_type in ["CE", "PE"]:
                         symbol = self.format_option_symbol("BANKNIFTY", expiry_date, strike, option_type)
                         atm_symbols.append(symbol)
                         logger.info(f"Auto-selected BankNifty ATM: {symbol}")
-            
+
             logger.info(f"Total ATM symbols auto-selected: {len(atm_symbols)}")
             return atm_symbols
-            
+
         except Exception as e:
             logger.error(f"Error in automatic ATM selection: {e}")
             return []
-    
+
     def get_all_symbols(self) -> List[Dict[str, str]]:
         """Get all symbols for automatic injection"""
         all_symbols = []
-        
+
         # Add all 13 symbols from your original system
         for openalgo_symbol, amibroker_symbol in self.symbol_mapping.items():
             exchange = openalgo_symbol.split(":")[0]
@@ -197,48 +197,48 @@ class OpenAlgoCorrectedInjector:
                 "exchange": exchange,
                 "symbol": symbol
             })
-        
+
         # Add ATM option symbols
         for atm_symbol in self.atm_symbols:
             all_symbols.append({
                 "openalgo_symbol": f"NFO:{atm_symbol}",
                 "amibroker_symbol": atm_symbol,
-                "exchange": "NFO", 
+                "exchange": "NFO",
                 "symbol": atm_symbol
             })
-        
+
         logger.info(f"Total symbols for automatic injection: {len(all_symbols)}")
         return all_symbols
-    
+
     def start_automatic_injection(self):
         """Start automatic symbols injection with real-time data"""
         all_symbols = self.get_all_symbols()
-        
+
         logger.info("=" * 80)
         logger.info("AUTOMATIC SYMBOLS INJECTION ACTIVE!")
         logger.info("=" * 80)
         logger.info("All symbols are being injected automatically into AmiBroker format:")
-        
+
         # Display all symbols
         for symbol_info in all_symbols:
             logger.info(f"  {symbol_info['openalgo_symbol']} -> {symbol_info['amibroker_symbol']}")
-        
+
         logger.info("=" * 80)
         logger.info("Real-time data streaming starting...")
         logger.info("=" * 80)
-        
+
         # Stream data continuously
         cycle_count = 0
         while True:
             try:
                 cycle_count += 1
                 logger.info(f"--- Data Cycle #{cycle_count} ---")
-                
+
                 for symbol_info in all_symbols:
                     openalgo_symbol = symbol_info["openalgo_symbol"]
                     exchange = symbol_info["exchange"]
                     symbol = symbol_info["symbol"]
-                    
+
                     # Get real-time data using correct POST endpoint
                     url = f"{self.base_url}/quotes"
                     payload = {
@@ -247,33 +247,33 @@ class OpenAlgoCorrectedInjector:
                         'symbol': symbol
                     }
                     response = requests.post(url, json=payload)
-                    
+
                     if response.status_code == 200:
                         data = response.json()
                         if data.get("status") == "success":
                             ltp = data["data"]["ltp"]
                             timestamp = data["data"].get("timestamp", datetime.datetime.now().isoformat())
-                            
+
                             # Log the data in AmiBroker format
                             logger.info(f"AUTO-INJECT: {symbol_info['amibroker_symbol']} LTP: {ltp} Time: {timestamp}")
                     else:
                         logger.warning(f"No data for {symbol} (HTTP {response.status_code})")
-                    
+
                     # Small delay to avoid rate limiting
                     time.sleep(0.5)
-                
+
                 logger.info(f"--- End Cycle #{cycle_count} ---")
-                
+
                 # Wait before next cycle
                 time.sleep(3)  # Update every 3 seconds
-                
+
             except KeyboardInterrupt:
                 logger.info("Stopping automatic symbols injection")
                 break
             except Exception as e:
                 logger.error(f"Error in automatic injection: {e}")
                 time.sleep(5)  # Wait before retrying
-    
+
     def run(self):
         """Main run method - AUTOMATIC SYMBOLS INJECTION"""
         try:
@@ -281,19 +281,19 @@ class OpenAlgoCorrectedInjector:
             logger.info("OPENALGO AUTOMATIC SYMBOLS INJECTOR STARTING...")
             logger.info("=" * 80)
             logger.info(f"Managing ALL {len(self.symbol_mapping)} symbols from your original system")
-            
+
             # Test connection first
             if not self.test_connection():
                 logger.error("Failed to connect to OpenAlgo - check API key and OpenAlgo status")
                 return
-            
+
             # Select ATM options automatically (disabled for now - index symbols not working)
             logger.info("ATM option selection disabled - using working symbols only")
             self.atm_symbols = []
-            
+
             # Start automatic real-time data streaming
             self.start_automatic_injection()
-            
+
         except Exception as e:
             logger.error(f"Error in automatic injection: {e}")
 

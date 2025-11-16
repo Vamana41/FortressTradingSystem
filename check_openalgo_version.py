@@ -13,7 +13,7 @@ try:
         print('OpenAlgo version file content:')
         print(content)
         print()
-        
+
         # Test different regex patterns
         patterns = [
             r'VERSION\s*=\s*[\'\"]([^\'\"]+)[\'\"]',
@@ -21,7 +21,7 @@ try:
             r'version\s*=\s*[\'\"]([^\'\"]+)[\'\"]',
             r'[\'\"](\d+\.\d+\.\d+\.?\d*)[\'\"]'
         ]
-        
+
         for i, pattern in enumerate(patterns):
             match = re.search(pattern, content, re.IGNORECASE)
             if match:

@@ -158,15 +158,15 @@ async def performance_summary(days: int = Query(default=30, ge=1, le=365)) -> Di
     brain = get_brain()
     if not brain:
         return {"error": "brain not attached"}
-    
+
     # Calculate performance metrics
     end_date = datetime.now()
     start_date = end_date - timedelta(days=days)
-    
+
     # Get historical data from brain state
     state = brain.get_state()
     total_pnl = sum(p.realized_pnl + p.unrealized_pnl for p in state.positions.values())
-    
+
     return {
         "period_days": days,
         "total_pnl": total_pnl,
@@ -186,28 +186,28 @@ async def signal_analytics(
     brain = get_brain()
     if not brain:
         return {"signals": [], "summary": {}}
-    
+
     signals = brain.get_multi_timeframe_signals(symbol, strategy, limit=1000)
-    
+
     # Filter by time period
     cutoff_time = datetime.now() - timedelta(hours=hours)
     recent_signals = [s for s in signals if datetime.fromisoformat(s.get("timestamp", "")) >= cutoff_time]
-    
+
     # Calculate analytics
     signal_types = {}
     strategy_counts = {}
     symbol_counts = {}
-    
+
     for signal in recent_signals:
         sig_type = signal.get("final_signal", {}).get("signal_type", "unknown")
         signal_types[sig_type] = signal_types.get(sig_type, 0) + 1
-        
+
         strat = signal.get("strategy", "unknown")
         strategy_counts[strat] = strategy_counts.get(strat, 0) + 1
-        
+
         sym = signal.get("symbol", "unknown")
         symbol_counts[sym] = symbol_counts.get(sym, 0) + 1
-    
+
     return {
         "period_hours": hours,
         "total_signals": len(recent_signals),
@@ -237,13 +237,13 @@ async def run_benchmark(
     iterations: int = Query(default=100, ge=10, le=10000)
 ) -> Dict[str, Any]:
     """Run a performance benchmark"""
-    
+
     async def dummy_benchmark():
         """Dummy benchmark function for testing"""
         await asyncio.sleep(0.001)  # 1ms delay
         # Simulate some CPU work
         _ = sum(i * i for i in range(100))
-    
+
     try:
         result = await performance_monitor.run_benchmark(name, dummy_benchmark, iterations)
         return asdict(result)
@@ -264,7 +264,7 @@ async def get_performance_summary() -> Dict[str, Any]:
     current = performance_monitor.get_current_metrics()
     history = performance_monitor.get_performance_history(24)  # Last 24 hours
     benchmarks = performance_monitor.get_benchmark_results(5)  # Last 5 benchmarks
-    
+
     # Calculate trends
     system_trend = "stable"
     if history:
@@ -272,12 +272,12 @@ async def get_performance_summary() -> Dict[str, Any]:
         if len(recent_cpu) >= 2:
             avg_recent = sum(recent_cpu) / len(recent_cpu)
             avg_older = sum([h["cpu_percent"] for h in history[-20:-10]]) / max(len(history[-20:-10]), 1)
-            
+
             if avg_recent > avg_older * 1.2:
                 system_trend = "increasing"
             elif avg_recent < avg_older * 0.8:
                 system_trend = "decreasing"
-    
+
     return {
         "current": current,
         "history_count": len(history),
@@ -299,33 +299,33 @@ async def save_performance_metrics() -> Dict[str, Any]:
 def get_performance_recommendations(metrics: Dict[str, Any]) -> List[str]:
     """Get performance recommendations based on current metrics"""
     recommendations = []
-    
+
     if not metrics:
         return recommendations
-    
+
     system_metrics = metrics.get("system", {})
     trading_metrics = metrics.get("trading", {})
-    
+
     # System recommendations
     if system_metrics.get("cpu_percent", 0) > 80:
         recommendations.append("High CPU usage detected. Consider optimizing signal processing or reducing concurrent strategies.")
-    
+
     if system_metrics.get("memory_percent", 0) > 85:
         recommendations.append("High memory usage detected. Consider reducing data cache size or optimizing memory usage.")
-    
+
     if system_metrics.get("disk_percent", 0) > 90:
         recommendations.append("High disk usage detected. Consider cleaning up old log files and data.")
-    
+
     # Trading recommendations
     if trading_metrics.get("error_rate", 0) > 5:
         recommendations.append("High error rate detected. Check system logs and API connections.")
-    
+
     if trading_metrics.get("latency_ms", 0) > 100:
         recommendations.append("High latency detected. Consider optimizing network connections or reducing processing complexity.")
-    
+
     if trading_metrics.get("signals_per_second", 0) > 10:
         recommendations.append("High signal rate detected. Consider implementing rate limiting or signal filtering.")
-    
+
     return recommendations
 
 # Scanner API Endpoints
@@ -361,7 +361,7 @@ async def create_scan_job(
     """Create a new scan job"""
     try:
         scanner_engine = get_scanner_engine()
-        
+
         # Get scanner configuration
         if custom_rules:
             scanner_config = ScannerConfig(
@@ -374,14 +374,14 @@ async def create_scan_job(
             scanner_config = PREBUILT_SCANNERS.get(scanner_name)
             if not scanner_config:
                 raise HTTPException(status_code=404, detail=f"Scanner '{scanner_name}' not found")
-        
+
         # Ensure scanner engine is running
         if not scanner_engine.is_running:
             await scanner_engine.start()
-        
+
         # Create scan job
         job_id = await scanner_engine.create_scan_job(scanner_config, symbols, timeframe)
-        
+
         return {
             "job_id": job_id,
             "scanner_name": scanner_config.name,
@@ -389,7 +389,7 @@ async def create_scan_job(
             "timeframe": timeframe,
             "status": "created"
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -401,7 +401,7 @@ async def get_active_scan_jobs() -> Dict[str, Any]:
     try:
         scanner_engine = get_scanner_engine()
         jobs = scanner_engine.get_active_jobs()
-        
+
         job_list = []
         for job in jobs:
             job_list.append({
@@ -414,9 +414,9 @@ async def get_active_scan_jobs() -> Dict[str, Any]:
                 "start_time": job.start_time.isoformat(),
                 "timeframe": job.timeframe
             })
-        
+
         return {"jobs": job_list, "count": len(job_list)}
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get scan jobs: {str(e)}")
 
@@ -426,10 +426,10 @@ async def get_scan_job_status(job_id: str) -> Dict[str, Any]:
     try:
         scanner_engine = get_scanner_engine()
         job = scanner_engine.get_job_status(job_id)
-        
+
         if not job:
             raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
-        
+
         job_data = {
             "job_id": job.job_id,
             "scanner_name": job.scanner_config.name,
@@ -440,13 +440,13 @@ async def get_scan_job_status(job_id: str) -> Dict[str, Any]:
             "start_time": job.start_time.isoformat(),
             "timeframe": job.timeframe
         }
-        
+
         if job.end_time:
             job_data["end_time"] = job.end_time.isoformat()
-        
+
         if job.error_message:
             job_data["error_message"] = job.error_message
-        
+
         # Include results if job is completed
         if job.status.value == "completed" and job.results:
             job_data["results_count"] = len(job.results)
@@ -460,9 +460,9 @@ async def get_scan_job_status(job_id: str) -> Dict[str, Any]:
                 }
                 for result in job.results[:50]  # Limit to first 50 results
             ]
-        
+
         return job_data
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -474,12 +474,12 @@ async def cancel_scan_job(job_id: str) -> Dict[str, Any]:
     try:
         scanner_engine = get_scanner_engine()
         success = await scanner_engine.cancel_job(job_id)
-        
+
         if not success:
             raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found or cannot be cancelled")
-        
+
         return {"job_id": job_id, "status": "cancelled"}
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -492,12 +492,12 @@ async def get_scanner_statistics() -> Dict[str, Any]:
         scanner_engine = get_scanner_engine()
         stats = scanner_engine.get_scan_statistics()
         cache_info = scanner_engine.get_cache_info()
-        
+
         return {
             "statistics": stats,
             "cache_info": cache_info
         }
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get scanner statistics: {str(e)}")
 
@@ -507,9 +507,9 @@ async def clear_scanner_cache() -> Dict[str, Any]:
     try:
         scanner_engine = get_scanner_engine()
         await scanner_engine.clear_cache()
-        
+
         return {"status": "cleared", "timestamp": datetime.now().isoformat()}
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to clear cache: {str(e)}")
 
@@ -518,13 +518,13 @@ async def start_scanner_engine() -> Dict[str, Any]:
     """Start the scanner engine"""
     try:
         scanner_engine = get_scanner_engine()
-        
+
         if scanner_engine.is_running:
             return {"status": "already_running", "message": "Scanner engine is already running"}
-        
+
         await scanner_engine.start()
         return {"status": "started", "message": "Scanner engine started successfully"}
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to start scanner engine: {str(e)}")
 
@@ -533,37 +533,37 @@ async def stop_scanner_engine() -> Dict[str, Any]:
     """Stop the scanner engine"""
     try:
         scanner_engine = get_scanner_engine()
-        
+
         if not scanner_engine.is_running:
             return {"status": "not_running", "message": "Scanner engine is not running"}
-        
+
         await scanner_engine.stop()
         return {"status": "stopped", "message": "Scanner engine stopped successfully"}
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to stop scanner engine: {str(e)}")
-    
+
     system_metrics = metrics.get("system", {})
     trading_metrics = metrics.get("trading", {})
-    
+
     # System recommendations
     if system_metrics.get("cpu_percent", 0) > 80:
         recommendations.append("High CPU usage detected. Consider optimizing signal processing or reducing concurrent strategies.")
-    
+
     if system_metrics.get("memory_percent", 0) > 85:
         recommendations.append("High memory usage detected. Consider reducing data cache size or optimizing memory usage.")
-    
+
     if system_metrics.get("disk_percent", 0) > 90:
         recommendations.append("High disk usage detected. Consider cleaning up old log files and data.")
-    
+
     # Trading recommendations
     if trading_metrics.get("error_rate", 0) > 5:
         recommendations.append("High error rate detected. Check system logs and API connections.")
-    
+
     if trading_metrics.get("latency_ms", 0) > 100:
         recommendations.append("High latency detected. Consider optimizing network connections or reducing processing complexity.")
-    
+
     if trading_metrics.get("signals_per_second", 0) > 10:
         recommendations.append("High signal rate detected. Consider implementing rate limiting or signal filtering.")
-    
+
     return recommendations

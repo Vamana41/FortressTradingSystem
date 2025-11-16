@@ -23,7 +23,7 @@ where cl >nul 2>nul
 if %errorlevel% neq 0 (
     echo ⚠️  Visual Studio compiler not found in PATH
     echo 📝 Attempting to use Visual Studio 2022 Community...
-    
+
     REM Try to find Visual Studio 2022
     if exist "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat" (
         call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat"

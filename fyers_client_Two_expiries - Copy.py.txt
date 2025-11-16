@@ -515,7 +515,7 @@ async def select_and_subscribe_banknifty_atm():
     index_symbol, strike_interval, base_underlying, segment = BANKNIFTY_INDEX_SYMBOL, BANKNIFTY_STRIKE_INTERVAL, "BANKNIFTY", "NFO"
 
     if fyers_api_client is None: logger.error("Fyers REST client NA for BankNifty ATM."); return False
-    
+
     # 1. Fetch LTP and calculate ATM strike
     loop = asyncio.get_running_loop()
     try:
@@ -533,25 +533,25 @@ async def select_and_subscribe_banknifty_atm():
     # 2. Fetch Option Chain to get expiries and closest strike
     active_future = await find_active_front_month_future(base_underlying, segment)
     if not active_future: logger.error(f"Could not determine active future for {base_underlying}."); return False
-    
+
     expiries_to_process, actual_atm_strike = [], None
     try:
         option_chain_payload = {"symbol": active_future, "strikecount": OPTION_CHAIN_STRIKE_COUNT}
         option_chain_response = await loop.run_in_executor(None, fyers_api_client.optionchain, option_chain_payload)
         oc_data = option_chain_response.get('data', {})
-        
+
         # Get and sort expiries
         if 'expiryData' in oc_data:
             api_expiry_dates = sorted([
                 (datetime.datetime.strptime(exp['date'], "%d-%m-%Y").date(), exp['date'])
                 for exp in oc_data['expiryData'] if exp.get('date')
             ], key=lambda x: x[0])
-            
+
             valid_expiries = [exp for exp in api_expiry_dates if exp[0] >= datetime.date.today()]
             if len(valid_expiries) > 0: expiries_to_process.append(valid_expiries[0])
             if len(valid_expiries) > 1: expiries_to_process.append(valid_expiries[1])
             logger.info(f"BankNifty Expiries to process: {[d[1] for d in expiries_to_process]}")
-        
+
         # Get closest strike from OC
         options_chain = oc_data.get('optionsChain', [])
         min_diff = float('inf')
@@ -560,7 +560,7 @@ async def select_and_subscribe_banknifty_atm():
             if strike is not None and abs(strike - target_atm_strike) < min_diff:
                 min_diff = abs(strike - target_atm_strike)
                 actual_atm_strike = strike
-        
+
         if actual_atm_strike is None: logger.error(f"Could not find ATM strike near {target_atm_strike}."); return False
         logger.info(f"Identified closest BankNifty ATM strike in OC: {actual_atm_strike}")
     except Exception as e:
@@ -586,7 +586,7 @@ async def select_and_subscribe_banknifty_atm():
                         fyers_symbol = contract_row.iloc[0]['Symbol ticker']
                         ami_date = expiry_date_obj.strftime("%d%b%y").upper()
                         ami_symbol = f"{base_underlying}{ami_date}{int(actual_atm_strike)}{opt_type}"
-                        
+
                         async with symbol_mapping_lock:
                             if fyers_symbol not in SYMBOL_MAPPING:
                                 SYMBOL_MAPPING[fyers_symbol] = ami_symbol
@@ -627,25 +627,25 @@ async def select_and_subscribe_nifty_weekly_atm():
     # 2. Fetch Option Chain to get expiries and closest strike
     active_future = await find_active_front_month_future(base_underlying, segment)
     if not active_future: logger.error(f"Could not determine active future for {base_underlying}."); return False
-    
+
     expiries_to_process, actual_atm_strike = [], None
     try:
         option_chain_payload = {"symbol": active_future, "strikecount": OPTION_CHAIN_STRIKE_COUNT}
         option_chain_response = await loop.run_in_executor(None, fyers_api_client.optionchain, option_chain_payload)
         oc_data = option_chain_response.get('data', {})
-        
+
         # Get and sort expiries
         if 'expiryData' in oc_data:
             api_expiry_dates = sorted([
                 (datetime.datetime.strptime(exp['date'], "%d-%m-%Y").date(), exp['date'])
                 for exp in oc_data['expiryData'] if exp.get('date')
             ], key=lambda x: x[0])
-            
+
             valid_expiries = [exp for exp in api_expiry_dates if exp[0] >= datetime.date.today()]
             if len(valid_expiries) > 0: expiries_to_process.append(valid_expiries[0])
             if len(valid_expiries) > 1: expiries_to_process.append(valid_expiries[1])
             logger.info(f"Nifty Expiries to process: {[d[1] for d in expiries_to_process]}")
-        
+
         # Get closest strike from OC
         options_chain = oc_data.get('optionsChain', [])
         min_diff = float('inf')
@@ -654,7 +654,7 @@ async def select_and_subscribe_nifty_weekly_atm():
             if strike is not None and abs(strike - target_atm_strike) < min_diff:
                 min_diff = abs(strike - target_atm_strike)
                 actual_atm_strike = strike
-        
+
         if actual_atm_strike is None: logger.error(f"Could not find ATM strike near {target_atm_strike}."); return False
         logger.info(f"Identified closest Nifty ATM strike in OC: {actual_atm_strike}")
     except Exception as e:
@@ -680,7 +680,7 @@ async def select_and_subscribe_nifty_weekly_atm():
                         fyers_symbol = contract_row.iloc[0]['Symbol ticker']
                         ami_date = expiry_date_obj.strftime("%d%b%y").upper()
                         ami_symbol = f"{base_underlying}{ami_date}{int(actual_atm_strike)}{opt_type}"
-                        
+
                         async with symbol_mapping_lock:
                             if fyers_symbol not in SYMBOL_MAPPING:
                                 SYMBOL_MAPPING[fyers_symbol] = ami_symbol
@@ -928,10 +928,10 @@ async def correct_initial_symbols():
     logger.info("--- Correcting Initial Symbol Mapping Placeholders ---")
     needs_update = False
     temp_mapping = {}
-    
+
     async with symbol_mapping_lock:
         initial_mapping = SYMBOL_MAPPING.copy()
-        
+
     placeholders_to_correct = {}
     for fyers_key, ami_value in initial_mapping.items():
         if isinstance(ami_value, str) and ami_value.endswith(FUTURES_SUFFIX):
@@ -943,20 +943,20 @@ async def correct_initial_symbols():
         base_name = ami_placeholder[:-len(FUTURES_SUFFIX)]
         segment = "NFO" if original_fyers_key.startswith(("NSE:", "NFO:")) else "MCX" if original_fyers_key.startswith("MCX:") else None
         logger.info(f"Initial Check: Found placeholder '{ami_placeholder}' (Base: '{base_name}', Segment: '{segment}', Original Key: '{original_fyers_key}')")
-        
+
         if segment:
             active_fyers_symbol = await find_active_front_month_future(base_name, segment)
             if active_fyers_symbol:
                 active_expiry_date = await get_actual_expiry_date(active_fyers_symbol)
                 correct_openalgo_ami_symbol = generate_openalgo_future_symbol_with_date(active_fyers_symbol, active_expiry_date)
-                
+
                 if correct_openalgo_ami_symbol:
                     if active_fyers_symbol != original_fyers_key:
                         logger.warning(f"  Initial Correction: Active symbol '{active_fyers_symbol}' differs from placeholder key '{original_fyers_key}'.")
                         logger.warning(f"  Updating Initial Mapping: NEW '{active_fyers_symbol}' -> '{correct_openalgo_ami_symbol}' (Replacing '{original_fyers_key}')")
                         temp_mapping[active_fyers_symbol] = correct_openalgo_ami_symbol
                         needs_update = True
-                        
+
                         # --- NEW CODE: PROACTIVELY ADD SYMBOL TO AMIBROKER ---
                         logger.warning(f"  >>> Proactively queuing new symbol '{correct_openalgo_ami_symbol}' for AmiBroker discovery <<<")
                         dummy_bar_data = {
@@ -965,7 +965,7 @@ async def correct_initial_symbols():
                         }
                         await queue_bar_snapshot(correct_openalgo_ami_symbol, dummy_bar_data, is_final_bar=True)
                         # --- END NEW CODE ---
-                        
+
                     else:
                         logger.debug(f"  Initial Check: Key '{active_fyers_symbol}' matches active symbol. Ensuring AB format is '{correct_openalgo_ami_symbol}'.")
                         temp_mapping[active_fyers_symbol] = correct_openalgo_ami_symbol
@@ -980,14 +980,14 @@ async def correct_initial_symbols():
         else:
             logger.error(f"  Initial Check Error: Cannot determine segment for key '{original_fyers_key}'. Keeping original.")
             temp_mapping[original_fyers_key] = ami_placeholder
-            
+
     if needs_update:
         async with symbol_mapping_lock:
             SYMBOL_MAPPING = temp_mapping
             logger.warning("Global SYMBOL_MAPPING updated after initial correction.")
     else:
         logger.info("Initial symbol mapping required no corrections.")
-        
+
     logger.info(f"--- Initial Symbol Correction Complete --- Final Initial Map: {SYMBOL_MAPPING}")
 
 
@@ -1027,13 +1027,13 @@ async def connect_and_manage():
     logger.info("Performing initial master contract download and load...")
     dl_ok = await download_master_contracts()
     if not dl_ok: logger.critical("Failed initial master contract download. Exiting."); return
-    
+
     load_ok = await load_master_contracts_to_dfs()
     if not load_ok: logger.critical("Failed initial master contract load. Exiting."); return
 
     logger.info("Initial master contract load complete.")
     await correct_initial_symbols()
-    
+
     # --- FINAL, ROBUST ATM LOGIC ---
     logger.info("--- Initializing ATM Symbol Logic ---")
     now_dt_local = datetime.datetime.now(pytz.timezone('Asia/Kolkata'))
@@ -1053,7 +1053,7 @@ async def connect_and_manage():
         logger.info("No saved ATM symbol file found for today.")
         atm_hms = [int(x) for x in ATM_SELECTION_TIME_STR.split(':')]
         atm_run_time = datetime.time(atm_hms[0], atm_hms[1], atm_hms[2])
-        
+
         if now_dt_local.time() >= atm_run_time:
             logger.warning(f"Running initial ATM selection as it's past {atm_run_time} and no file was found.")
             try:

@@ -80,8 +80,8 @@ HTTP API  WebSocket
 ### REST API Endpoints
 
 #### 1. Ping Endpoint
-**Endpoint**: `/api/v1/ping`  
-**Method**: POST  
+**Endpoint**: `/api/v1/ping`
+**Method**: POST
 **Purpose**: Verify server connectivity and authentication
 
 **Request Body**:
@@ -101,8 +101,8 @@ HTTP API  WebSocket
 ```
 
 #### 2. Quotes Endpoint
-**Endpoint**: `/api/v1/quotes`  
-**Method**: POST  
+**Endpoint**: `/api/v1/quotes`
+**Method**: POST
 **Purpose**: Fetch real-time Level 1 quotes
 
 **Request Body**:
@@ -131,8 +131,8 @@ HTTP API  WebSocket
 ```
 
 #### 3. Historical Data Endpoint
-**Endpoint**: `/api/v1/history`  
-**Method**: POST  
+**Endpoint**: `/api/v1/history`
+**Method**: POST
 **Purpose**: Retrieve historical OHLCV data
 
 **Request Body**:

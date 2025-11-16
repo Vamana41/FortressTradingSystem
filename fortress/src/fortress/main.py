@@ -28,7 +28,7 @@ logger = get_logger(__name__)
 
 class FortressTradingSystem:
     """Main Fortress Trading System application."""
-    
+
     def __init__(self, config_path: Optional[str] = None):
         """Initialize the trading system."""
         self.config_path = config_path
@@ -40,17 +40,17 @@ class FortressTradingSystem:
         self.openalgo_integration: Optional[FortressOpenAlgoIntegration] = None
         self._running = False
         self._shutdown_event = asyncio.Event()
-        
+
         # Configure logging
         configure_structlog(log_level="INFO", json_format=False)
-        
+
         logger.info("Fortress Trading System initialized")
-    
+
     async def start(self) -> None:
         """Start the trading system."""
         try:
             logger.info("Starting Fortress Trading System")
-            
+
             # Initialize event bus
             self.event_bus = event_bus_manager.get_event_bus(
                 name="fortress",
@@ -58,89 +58,89 @@ class FortressTradingSystem:
                 key_prefix="fortress",
             )
             await self.event_bus.connect()
-            
+
             # Initialize OpenAlgo Gateway with automatic API key management
             await self._initialize_openalgo_gateway()
-            
+
             logger.info("OpenAlgo Gateway connected successfully")
-            
+
             # Initialize brain with OpenAlgo gateway
             self.brain = FortressBrain(brain_id="main")
             await self.brain.initialize(self.event_bus, self.openalgo_gateway)
             await self.brain.start()
-            
+
             # Connect dashboard to brain
             await initialize_dashboard_connection(self.brain)
             logger.info("Dashboard connected to brain successfully")
-            
+
             # Initialize Worker Manager with OpenAlgo gateway
             self.worker_manager = WorkerManager(
                 event_bus=self.event_bus
             )
             await self.worker_manager.start_worker()
             logger.info("Worker Manager started successfully")
-            
+
             # Initialize AmiBroker integration
             self.amibroker_integration = AmiBrokerIntegration(
                 watch_directory=Path("./signals/amibroker"),
                 file_extension=".csv",
             )
             await self.amibroker_integration.start()
-            
+
             # Start event consumers
             await start_event_consumers("fortress")
-            
+
             # Register sample strategies
             await self._register_sample_strategies()
-            
+
             self._running = True
             logger.info("Fortress Trading System started successfully")
-            
+
             # Wait for shutdown signal
             await self._shutdown_event.wait()
-            
+
         except Exception as e:
             logger.error("Failed to start trading system", error=str(e))
             raise
-    
+
     async def stop(self) -> None:
         """Stop the trading system."""
         logger.info("Stopping Fortress Trading System")
-        
+
         self._running = False
-        
+
         # Stop components in reverse order
         if self.worker_manager:
             await self.worker_manager.stop()
             logger.info("Worker Manager stopped")
-        
+
         if self.amibroker_integration:
             await self.amibroker_integration.stop()
             logger.info("AmiBroker integration stopped")
-        
+
         if self.brain:
             await self.brain.stop()
             logger.info("Brain stopped")
-        
+
         if self.openalgo_gateway:
             await self.openalgo_gateway.disconnect()
             logger.info("OpenAlgo Gateway disconnected")
-        
+
         if self.event_bus:
             await self.event_bus.disconnect()
             logger.info("Event bus disconnected")
-        
+
         # Signal shutdown complete
         self._shutdown_event.set()
-    
+
     async def _initialize_openalgo_gateway(self) -> None:
         """Initialize OpenAlgo Gateway with automatic API key management."""
         logger.info("Initializing OpenAlgo Gateway with automatic API key management")
-        
+
         # First try to get API key from secure storage or environment
         api_key_manager = SecureAPIKeyManager()
         api_key = api_key_manager.get_api_key("openalgo")
-        
+
         if not api_key:
             # Fallback to environment variable if not found in secure storage
             api_key = os.getenv("OPENALGO_API_KEY", "your_openalgo_api_key")
@@ -148,7 +148,7 @@ class FortressTradingSystem:
                 # Store it securely for future use
                 api_key_manager.store_api_key("openalgo", api_key)
                 logger.info("OpenAlgo API key stored securely for future use")
-        
+
         # Initialize OpenAlgo Gateway
         self.openalgo_gateway = OpenAlgoGateway(
             api_key=api_key,
@@ -156,14 +156,14 @@ class FortressTradingSystem:
             event_bus=self.event_bus
         )
         await self.openalgo_gateway.connect()
-        
+
         # Setup automatic API key management
         self.openalgo_integration = FortressOpenAlgoIntegration(self.brain)
-        
+
         # Check if we should try automatic key retrieval
         openalgo_username = os.getenv("OPENALGO_USERNAME")
         openalgo_password = os.getenv("OPENALGO_PASSWORD")
-        
+
         if openalgo_username and openalgo_password:
             logger.info("Found OpenAlgo credentials, setting up automatic API key management...")
             try:
@@ -182,9 +182,9 @@ class FortressTradingSystem:
             logger.info("No OpenAlgo credentials found in environment. Manual API key configuration required.")
             logger.info("To enable automatic API key management, set OPENALGO_USERNAME and OPENALGO_PASSWORD environment variables.")
             logger.info("Or use the get_openalgo_api_key.py script to retrieve and store the API key.")
-        
+
         logger.info("Fortress Trading System stopped")
-    
+
     async def _register_sample_strategies(self) -> None:
         """Register sample strategies for testing."""
         # Register sample strategies
@@ -220,7 +220,7 @@ class FortressTradingSystem:
                 },
             },
         ]
-        
+
         for strategy_config in strategies:
             await self.brain.register_strategy(**strategy_config)
             await self.brain.activate_strategy(
@@ -228,18 +228,18 @@ class FortressTradingSystem:
                 strategy_config["timeframe"],
                 strategy_config["symbol"],
             )
-            
+
             logger.info(
                 "Sample strategy registered and activated",
                 strategy_name=strategy_config["strategy_name"],
                 timeframe=strategy_config["timeframe"],
                 symbol=strategy_config["symbol"],
             )
-    
+
     def is_running(self) -> bool:
         """Check if the system is running."""
         return self._running
-    
+
     async def get_status(self) -> Dict[str, Any]:
         """Get system status."""
         status = {
@@ -249,19 +249,19 @@ class FortressTradingSystem:
             "event_bus_connected": self.event_bus is not None,
             "worker_connected": self.worker_manager is not None,
         }
-        
+
         if self.worker_manager:
             status["worker_status"] = await self.worker_manager.get_worker_status()
-        
+
         if self.brain:
             status["brain_state"] = self.brain.get_state().model_dump()
-        
+
         if self.event_bus:
             try:
                 status["queue_stats"] = await self.event_bus.get_queue_stats()
             except Exception as e:
                 logger.warning("Failed to get queue stats", error=str(e))
-        
+
         return status
 
 
@@ -269,24 +269,24 @@ async def main() -> None:
     """Main application entry point."""
     # Create trading system
     trading_system = FortressTradingSystem()
-    
+
     # Set up signal handlers
     def signal_handler(sig: int, frame: Any) -> None:
         """Handle shutdown signals."""
         logger.info("Received shutdown signal", signal=sig)
         asyncio.create_task(trading_system.stop())
-    
+
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
-    
+
     try:
         # Start the system
         await trading_system.start()
-        
+
     except KeyboardInterrupt:
         logger.info("Received keyboard interrupt")
         await trading_system.stop()
-        
+
     except Exception as e:
         logger.error("Application error", error=str(e))
         await trading_system.stop()
@@ -301,6 +301,6 @@ if __name__ == "__main__":
     else:
         import uvloop
         uvloop.install()
-    
+
     # Run the application
     asyncio.run(main())

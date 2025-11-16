@@ -19,7 +19,7 @@ def test_symbol(exchange, symbol):
             },
             timeout=10
         )
-        
+
         if response.status_code == 200:
             data = response.json()
             if data.get("status") == "success":
@@ -43,28 +43,28 @@ test_symbols = [
     ("MCX", "ALUMINI25APRFUT"),
     ("MCX", "COPPER25APRFUT"),
     ("MCX", "LEADMINI25APRFUT"),
-    
+
     # NSE Futures (original format)
     ("NSE", "BANKNIFTY25APRFUT"),
     ("NSE", "NIFTY25APRFUT"),
-    
+
     # NSE Equities (simple format)
     ("NSE", "SBIN"),
     ("NSE", "RELIANCE"),
     ("NSE", "TCS"),
     ("NSE", "INFY"),
     ("NSE", "ITC"),
-    
+
     # NSE Equities (with -EQ)
     ("NSE", "SBIN-EQ"),
     ("NSE", "RELIANCE-EQ"),
-    
+
     # Indices
     ("NSE", "NIFTY"),
     ("NSE", "BANKNIFTY"),
     ("NSE", "NIFTY50"),
     ("NSE", "NIFTYBANK"),
-    
+
     # NFO Options
     ("NFO", "NIFTY17JAN2519500CE"),
     ("NFO", "BANKNIFTY17JAN2545000PE"),
@@ -78,7 +78,7 @@ for exchange, symbol in test_symbols:
     result = test_symbol(exchange, symbol)
     status = "✓" if "SUCCESS" in result else "✗"
     print(f"{status} {exchange}:{symbol} - {result}")
-    
+
     if "SUCCESS" in result:
         working_symbols.append((exchange, symbol))
 

@@ -14,7 +14,7 @@ from urllib.parse import urljoin
 def check_openalgo_server():
     """Check if OpenAlgo server is running."""
     print("🔍 Checking OpenAlgo Server...")
-    
+
     try:
         response = requests.get("http://127.0.0.1:5000", timeout=5)
         if response.status_code == 200:
@@ -33,9 +33,9 @@ def check_openalgo_server():
 def check_openalgo_api_endpoints():
     """Check OpenAlgo API endpoints."""
     print("\n🔍 Checking OpenAlgo API Endpoints...")
-    
+
     base_url = "http://127.0.0.1:5000/api/v1"
-    
+
     # Test basic connectivity
     try:
         response = requests.get(f"{base_url}/", timeout=5)
@@ -45,7 +45,7 @@ def check_openalgo_api_endpoints():
             print(f"⚠️  API documentation status: {response.status_code}")
     except Exception as e:
         print(f"⚠️  API documentation error: {e}")
-    
+
     # Test ping endpoint without auth
     try:
         response = requests.post(f"{base_url}/ping", json={"apikey": "test"}, timeout=5)
@@ -62,13 +62,13 @@ def check_openalgo_api_endpoints():
 def check_fortress_configuration():
     """Check Fortress configuration."""
     print("\n🔍 Checking Fortress Configuration...")
-    
+
     # Check if .env file exists
     env_file = ".env"
     if not os.path.exists(env_file):
         print("❌ .env file not found")
         return False
-    
+
     # Check for OpenAlgo API key
     try:
         with open(env_file, 'r') as f:
@@ -95,35 +95,35 @@ def check_fortress_configuration():
 def check_amibroker_integration():
     """Check AmiBroker integration components."""
     print("\n🔍 Checking AmiBroker Integration...")
-    
+
     # Check if enhanced plugin exists
     plugin_files = [
         "OpenAlgoPlugin-enhanced/OpenAlgoPlugin.dll",
         "OpenAlgoPlugin-enhanced/Plugin_complete.cpp"
     ]
-    
+
     plugin_found = False
     for plugin_file in plugin_files:
         if os.path.exists(plugin_file):
             print(f"✅ Enhanced plugin found: {plugin_file}")
             plugin_found = True
             break
-    
+
     if not plugin_found:
         print("⚠️  Enhanced AmiBroker plugin not found")
-    
+
     # Check AFL files
     afl_files = [
         "OpenAlgo_ATM_Scanner.afl",
         "setup_amibroker_plugin.py"
     ]
-    
+
     afl_found = 0
     for afl_file in afl_files:
         if os.path.exists(afl_file):
             print(f"✅ AFL file found: {afl_file}")
             afl_found += 1
-    
+
     if afl_found == len(afl_files):
         print("✅ All AmiBroker integration files ready")
         return True
@@ -134,7 +134,7 @@ def check_amibroker_integration():
 def check_fortress_core_files():
     """Check Fortress core files."""
     print("\n🔍 Checking Fortress Core Files...")
-    
+
     core_files = [
         "fortress/src/fortress/main.py",
         "fortress/src/fortress/dashboard/main.py",
@@ -142,7 +142,7 @@ def check_fortress_core_files():
         "fortress/src/fortress/integrations/openalgo_gateway.py",
         "fortress/src/fortress/utils/api_key_manager.py"
     ]
-    
+
     missing_files = []
     for file_path in core_files:
         if os.path.exists(file_path):
@@ -150,7 +150,7 @@ def check_fortress_core_files():
         else:
             print(f"❌ {file_path}")
             missing_files.append(file_path)
-    
+
     if not missing_files:
         print("✅ All core Fortress files present")
         return True
@@ -161,7 +161,7 @@ def check_fortress_core_files():
 def test_api_key_integration():
     """Test API key integration with actual endpoints."""
     print("\n🔍 Testing API Key Integration...")
-    
+
     # Get API key from .env
     try:
         with open(".env", 'r') as f:
@@ -176,23 +176,23 @@ def test_api_key_integration():
     except Exception as e:
         print(f"❌ Error reading API key: {e}")
         return False
-    
+
     if not api_key or len(api_key) < 10:
         print("❌ Invalid API key")
         return False
-    
+
     base_url = "http://127.0.0.1:5000/api/v1"
-    
+
     headers = {
         "Content-Type": "application/json",
         "api-key": api_key
     }
-    
+
     # Test ping endpoint
     try:
         data = {"apikey": api_key}
         response = requests.post(f"{base_url}/ping", headers=headers, json=data, timeout=10)
-        
+
         if response.status_code == 200:
             result = response.json()
             print(f"✅ API key integration working")
@@ -206,18 +206,18 @@ def test_api_key_integration():
             print(f"❌ API integration test failed: {response.status_code}")
             print(f"Response: {response.text[:100]}")
             return False
-            
+
     except Exception as e:
         print(f"❌ API integration error: {e}")
         return False
 
 def generate_status_report():
     """Generate a comprehensive status report."""
-    
+
     print("\n" + "="*60)
     print("📊 FORTRESS TRADING SYSTEM STATUS REPORT")
     print("="*60)
-    
+
     checks = [
         ("OpenAlgo Server", check_openalgo_server()),
         ("OpenAlgo API Endpoints", check_openalgo_api_endpoints()),
@@ -226,19 +226,19 @@ def generate_status_report():
         ("Fortress Core Files", check_fortress_core_files()),
         ("API Key Integration", test_api_key_integration())
     ]
-    
+
     passed = 0
     total = len(checks)
-    
+
     print("\nCheck Results:")
     for check_name, result in checks:
         status = "✅ PASS" if result else "❌ FAIL"
         print(f"  {check_name}: {status}")
         if result:
             passed += 1
-    
+
     print(f"\nOverall Status: {passed}/{total} checks passed")
-    
+
     if passed == total:
         print("🎉 SYSTEM READY FOR DEPLOYMENT!")
         print("\nNext steps:")
@@ -252,7 +252,7 @@ def generate_status_report():
     else:
         print("❌ SYSTEM NOT READY")
         print("\nSignificant issues need to be resolved")
-    
+
     return passed, total
 
 def main():
@@ -260,22 +260,22 @@ def main():
     print("🔧 Fortress Trading System - Complete Status Check")
     print("=" * 60)
     print("Checking all system components before deployment...")
-    
+
     passed, total = generate_status_report()
-    
+
     # Create status file
     with open("system_status_report.txt", "w") as f:
         f.write(f"Fortress Trading System Status Report\n")
         f.write(f"Generated: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
         f.write(f"Status: {passed}/{total} checks passed\n")
-        
+
         if passed == total:
             f.write("Status: READY FOR DEPLOYMENT\n")
         elif passed >= total * 0.8:
             f.write("Status: MOSTLY READY\n")
         else:
             f.write("Status: NOT READY\n")
-    
+
     print(f"\n📄 Status report saved to: system_status_report.txt")
 
 if __name__ == "__main__":

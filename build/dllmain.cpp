@@ -16,4 +16,3 @@ BOOL APIENTRY DllMain1( HMODULE hModule,
     }
     return TRUE;
 }
-

@@ -58,7 +58,7 @@ class SignalFileHandler(FileSystemEventHandler):
                 parts = line.split(',')
                 if len(parts) == 3:
                     symbol, action, price_str = parts
-                    
+
                     try:
                         price = float(price_str)
                     except ValueError:
@@ -71,17 +71,17 @@ class SignalFileHandler(FileSystemEventHandler):
                         "action": action.upper(),
                         "price": price
                     }
-                    
+
                     topic = "events.signal.amibroker"
                     self.socket.send_string(f"{topic} {json.dumps(event_payload)}")
                     logger.info(f"Published to ZMQ -> Topic: {topic}, Payload: {event_payload}")
-                
+
                 else:
                     logger.warning(f"Could not parse signal file (expected 3 parts, got {len(parts)}): {event.src_path}")
-            
+
             # Clean up the file after processing
             os.remove(event.src_path)
-            
+
         except PermissionError:
             logger.warning(f"Permission denied for {event.src_path}. AmiBroker may still hold the lock. Will retry.")
         except Exception as e:
@@ -91,7 +91,7 @@ def main() -> None:
     """Main function to start the watcher and ZMQ publisher."""
     context = zmq.Context()
     socket = context.socket(zmq.PUB)
-    
+
     try:
         socket.connect(ZMQ_PUB_URL)
         logger.info(f"Sentinel connected to ZMQ Publisher at {ZMQ_PUB_URL}")
@@ -107,7 +107,7 @@ def main() -> None:
     event_handler = SignalFileHandler(socket)
     observer = Observer()
     observer.schedule(event_handler, AMI_SIGNAL_DIR, recursive=False)
-    
+
     try:
         observer.start()
         logger.info(f"Sentinel is now watching for signals in: {AMI_SIGNAL_DIR}")

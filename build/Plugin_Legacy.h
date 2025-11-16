@@ -1,24 +1,24 @@
 ////////////////////////////////////////
-// Plugin_Legacy.h 
+// Plugin_Legacy.h
 // Legacy data structures
 //
-// Version 2.1 
+// Version 2.1
 ///////////////////////////////////////////////////////////////////////
-// Copyright (c) 2001-2010 AmiBroker.com. All rights reserved. 
+// Copyright (c) 2001-2010 AmiBroker.com. All rights reserved.
 //
-// Users and possessors of this source code are hereby granted a nonexclusive, 
+// Users and possessors of this source code are hereby granted a nonexclusive,
 // royalty-free copyright license to use this code in individual and commercial software.
 //
-// AMIBROKER.COM MAKES NO REPRESENTATION ABOUT THE SUITABILITY OF THIS SOURCE CODE FOR ANY PURPOSE. 
-// IT IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY OF ANY KIND. 
-// AMIBROKER.COM DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOURCE CODE, 
-// INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. 
-// IN NO EVENT SHALL AMIBROKER.COM BE LIABLE FOR ANY SPECIAL, INDIRECT, INCIDENTAL, OR 
-// CONSEQUENTIAL DAMAGES, OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, 
-// WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, 
+// AMIBROKER.COM MAKES NO REPRESENTATION ABOUT THE SUITABILITY OF THIS SOURCE CODE FOR ANY PURPOSE.
+// IT IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY OF ANY KIND.
+// AMIBROKER.COM DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOURCE CODE,
+// INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+// IN NO EVENT SHALL AMIBROKER.COM BE LIABLE FOR ANY SPECIAL, INDIRECT, INCIDENTAL, OR
+// CONSEQUENTIAL DAMAGES, OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
+// WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
 // ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOURCE CODE.
-// 
-// Any use of this source code must include the above notice, 
+//
+// Any use of this source code must include the above notice,
 // in the user documentation and internal comments to the code.
 ///////////////////////////////////////////////////////////////////////
 
@@ -89,7 +89,7 @@ struct StockInfoFormat4 {
 						char	LastSplitDay;  // 1..31
 						char	AliasName[16];
                         char    ShortName[MAX_SYMBOL_LEN_FORMAT4];
-                        int     Flags;          /* MarketID etc.*/      
+                        int     Flags;          /* MarketID etc.*/
 						float	SharesFloat;//                        int     Code;
                         float	SharesOut; //int     StockQty;
                         unsigned int  DividendPayDate;
@@ -97,8 +97,8 @@ struct StockInfoFormat4 {
                         unsigned int ExDividendDate;         /* div date */
                         float   DividendPerShare;	//
                         float   PEGRatio;			// PE Growth ratio
-                        float   ProfitMargin;	
-                        float	OperatingMargin;    
+                        float   ProfitMargin;
+                        float	OperatingMargin;
                         float	OneYearTargetPrice;
 						int		IndustryID;
                         int     MoreFlags;          /* 0x80000000 - wartoôci w tysiâcach v2.52 */
@@ -127,7 +127,7 @@ struct StockInfoFormat4 {
 						float   ForwardDividendPerShare;            /* zysk brutto kwart */
 						int		DataSource;			/* the ID of the data plug-in, 0 - accept workspace settings */
                         int     DataLocalMode;		/* local mode of operation - 0 - accept workspace settings, 1 - store locally, 2 - don't store locally */
-               			float	Beta;	
+               			float	Beta;
 						float	OperatingCashFlow;
 						float	LeveredFreeCashFlow;
 						int		WatchListBits;		/* 32 watch lists */
@@ -138,7 +138,7 @@ struct StockInfoFormat4 {
 struct _IntradaySettingsFormat4 {
 	int		TimeShift; // in hours
 	int		FilterAfterHours; //
-	unsigned int		SessionStart; // bit encoding HHHHH.MMMMMM.0000	 hours << 10 | ( minutes << 4 ) 
+	unsigned int		SessionStart; // bit encoding HHHHH.MMMMMM.0000	 hours << 10 | ( minutes << 4 )
 	unsigned int		SessionEnd;	  // 			  //
 	BOOL	FilterWeekends;
 	int		DailyCompressionMode; // 0 - exchange, 1 - local, 2 -session based
@@ -176,7 +176,7 @@ struct _WorkspaceOldFormat4 {
 	int		TimeBase;
 	int		TimeShift; // in hours
 	BOOL	FilterAfterHours; //
-	int		SessionStart; // bit encoding HHHHH.MMMMMM.0000	 hours << 10 | ( minutes << 4 ) 
+	int		SessionStart; // bit encoding HHHHH.MMMMMM.0000	 hours << 10 | ( minutes << 4 )
 	int		SessionEnd;	  // 			  //
 	BOOL	FilterWeekends;
 };

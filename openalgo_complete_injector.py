@@ -30,19 +30,19 @@ class OpenAlgoCompleteInjector:
         self.base_url = 'http://127.0.0.1:5000/api/v1'
         self.websocket = None
         self.authenticated = False
-        
+
         # Original symbols from your system
         self.original_symbols = [
             "SBIN", "RELIANCE", "TCS", "INFY", "ITC",
             "CRUDEOIL", "NATURALGAS", "GOLD", "SILVER", "COPPER", "NICKEL"
         ]
-        
+
         # ATM options will be added
         self.atm_symbols = []
-        
+
         # All working symbols found
         self.working_symbols = []
-        
+
     async def search_symbols(self, query, exchange=None):
         """Search for symbols using OpenAlgo Search API"""
         try:
@@ -50,17 +50,17 @@ class OpenAlgoCompleteInjector:
                 "apikey": self.api_key,
                 "query": query
             }
-            
+
             if exchange:
                 search_data["exchange"] = exchange
-            
+
             logger.info(f"Searching for: {query} (exchange: {exchange})")
             response = requests.post(
                 f"{self.base_url}/search",
                 json=search_data,
                 timeout=10
             )
-            
+
             if response.status_code == 200:
                 result = response.json()
                 if result.get("status") == "success":
@@ -71,18 +71,18 @@ class OpenAlgoCompleteInjector:
                     logger.warning(f"Search failed for {query}: {result.get('message')}")
             else:
                 logger.error(f"Search API error {response.status_code}: {response.text}")
-                
+
         except Exception as e:
             logger.error(f"Search error for {query}: {e}")
-        
+
         return []
-    
+
     async def get_atm_options(self):
         """Get ATM options using OpenAlgo OptionSymbol API"""
         try:
             # Get current date for expiry
             today = datetime.now()
-            
+
             # Get next monthly expiry (last Thursday of month)
             import calendar
             last_day = calendar.monthrange(today.year, today.month)[1]
@@ -100,9 +100,9 @@ class OpenAlgoCompleteInjector:
                 expiry_date = f"{last_thursday:02d}{calendar.month_abbr[next_month].upper()}{str(next_year)[2:]}"
             else:
                 expiry_date = f"{last_thursday:02d}{calendar.month_abbr[today.month].upper()}{str(today.year)[2:]}"
-            
+
             logger.info(f"Getting ATM options for expiry: {expiry_date}")
-            
+
             # Get NIFTY ATM
             nifty_atm_data = {
                 "apikey": self.api_key,
@@ -114,13 +114,13 @@ class OpenAlgoCompleteInjector:
                 "offset": "ATM",
                 "option_type": "CE"
             }
-            
+
             response = requests.post(
                 f"{self.base_url}/optionsymbol",
                 json=nifty_atm_data,
                 timeout=10
             )
-            
+
             if response.status_code == 200:
                 result = response.json()
                 if result.get("status") == "success":
@@ -128,7 +128,7 @@ class OpenAlgoCompleteInjector:
                     nifty_exchange = result.get("exchange", "NFO")
                     logger.info(f"NIFTY ATM CE: {nifty_ce}")
                     self.atm_symbols.append({"symbol": nifty_ce, "exchange": nifty_exchange})
-                    
+
                     # Get PE as well
                     nifty_atm_data["option_type"] = "PE"
                     response = requests.post(
@@ -142,7 +142,7 @@ class OpenAlgoCompleteInjector:
                             nifty_pe = result.get("symbol")
                             logger.info(f"NIFTY ATM PE: {nifty_pe}")
                             self.atm_symbols.append({"symbol": nifty_pe, "exchange": nifty_exchange})
-            
+
             # Get BANKNIFTY ATM
             banknifty_atm_data = {
                 "apikey": self.api_key,
@@ -154,13 +154,13 @@ class OpenAlgoCompleteInjector:
                 "offset": "ATM",
                 "option_type": "CE"
             }
-            
+
             response = requests.post(
                 f"{self.base_url}/optionsymbol",
                 json=banknifty_atm_data,
                 timeout=10
             )
-            
+
             if response.status_code == 200:
                 result = response.json()
                 if result.get("status") == "success":
@@ -168,7 +168,7 @@ class OpenAlgoCompleteInjector:
                     banknifty_exchange = result.get("exchange", "NFO")
                     logger.info(f"BANKNIFTY ATM CE: {banknifty_ce}")
                     self.atm_symbols.append({"symbol": banknifty_ce, "exchange": banknifty_exchange})
-                    
+
                     # Get PE as well
                     banknifty_atm_data["option_type"] = "PE"
                     response = requests.post(
@@ -182,22 +182,22 @@ class OpenAlgoCompleteInjector:
                             banknifty_pe = result.get("symbol")
                             logger.info(f"BANKNIFTY ATM PE: {banknifty_pe}")
                             self.atm_symbols.append({"symbol": banknifty_pe, "exchange": banknifty_exchange})
-                            
+
         except Exception as e:
             logger.error(f"ATM options error: {e}")
-    
+
     async def find_all_symbols(self):
         """Find all symbols using OpenAlgo Search API"""
         logger.info("Finding all symbols using OpenAlgo Search API...")
-        
+
         # Get ATM options first
         await self.get_atm_options()
-        
+
         # Search for each original symbol
         for symbol in self.original_symbols:
             # Search in different exchanges
             exchanges_to_try = ["NSE", "BSE", "MCX", "NFO", "CDS"]
-            
+
             for exchange in exchanges_to_try:
                 symbols = await self.search_symbols(symbol, exchange)
                 if symbols:
@@ -209,7 +209,7 @@ class OpenAlgoCompleteInjector:
                             "instrumenttype": found_symbol.get("instrumenttype", "")
                         })
                     break  # Found symbol, move to next one
-            
+
             # If not found with exchange filter, try without
             if not any(s["symbol"] == symbol for s in self.working_symbols):
                 symbols = await self.search_symbols(symbol)
@@ -221,7 +221,7 @@ class OpenAlgoCompleteInjector:
                             "name": found_symbol.get("name", ""),
                             "instrumenttype": found_symbol.get("instrumenttype", "")
                         })
-        
+
         # Add ATM options
         for atm_option in self.atm_symbols:
             self.working_symbols.append({
@@ -230,9 +230,9 @@ class OpenAlgoCompleteInjector:
                 "name": f"ATM Option {atm_option['symbol']}",
                 "instrumenttype": "OPTIDX"
             })
-        
+
         logger.info(f"Found {len(self.working_symbols)} total symbols")
-        
+
     async def connect(self):
         """Connect to OpenAlgo WebSocket"""
         try:
@@ -243,7 +243,7 @@ class OpenAlgoCompleteInjector:
         except Exception as e:
             logger.error(f"❌ Failed to connect to WebSocket: {e}")
             return False
-    
+
     async def authenticate(self):
         """Authenticate with OpenAlgo using API key"""
         try:
@@ -251,13 +251,13 @@ class OpenAlgoCompleteInjector:
                 "action": "auth",
                 "api_key": self.api_key
             }
-            
+
             logger.info("Authenticating with OpenAlgo...")
             await self.websocket.send(json.dumps(auth_message))
-            
+
             response = await asyncio.wait_for(self.websocket.recv(), timeout=10.0)
             auth_data = json.loads(response)
-            
+
             if auth_data.get("status") == "success":
                 logger.info(f"✅ Authentication successful! User: {auth_data.get('user_id')}, Broker: {auth_data.get('broker')}")
                 self.authenticated = True
@@ -265,11 +265,11 @@ class OpenAlgoCompleteInjector:
             else:
                 logger.error(f"❌ Authentication failed: {auth_data}")
                 return False
-                
+
         except Exception as e:
             logger.error(f"❌ Authentication error: {e}")
             return False
-    
+
     async def subscribe_symbol(self, symbol_info):
         """Subscribe to a single symbol"""
         try:
@@ -278,16 +278,16 @@ class OpenAlgoCompleteInjector:
                 "exchange": symbol_info["exchange"],
                 "symbol": symbol_info["symbol"]
             }
-            
+
             logger.info(f"Subscribing to {symbol_info['exchange']}:{symbol_info['symbol']} ({symbol_info.get('name', '')})")
             await self.websocket.send(json.dumps(subscribe_message))
-            
+
             # Wait for confirmation
             response = await asyncio.wait_for(self.websocket.recv(), timeout=10.0)
             response_data = json.loads(response)
-            
+
             status = response_data.get("status", "unknown")
-            
+
             if status == "success":
                 logger.info(f"✅ Successfully subscribed to {symbol_info['exchange']}:{symbol_info['symbol']}")
                 return True
@@ -305,74 +305,74 @@ class OpenAlgoCompleteInjector:
             else:
                 logger.warning(f"⚠️  Subscription failed for {symbol_info['exchange']}:{symbol_info['symbol']}: {response_data.get('message', 'Unknown error')}")
                 return False
-                
+
         except Exception as e:
             logger.error(f"❌ Subscription error for {symbol_info['exchange']}:{symbol_info['symbol']}: {e}")
             return False
-    
+
     async def inject_all_symbols(self):
         """Inject all found symbols"""
         logger.info("="*60)
         logger.info("OPENALGO COMPLETE SYMBOL INJECTOR STARTING...")
         logger.info("="*60)
-        
+
         logger.info(f"Injecting {len(self.working_symbols)} symbols:")
         for symbol_info in self.working_symbols:
             logger.info(f"  - {symbol_info['exchange']}:{symbol_info['symbol']} ({symbol_info.get('name', '')})")
-        
+
         # Subscribe to all symbols
         success_count = 0
         for symbol_info in self.working_symbols:
             if await self.subscribe_symbol(symbol_info):
                 success_count += 1
-        
+
         logger.info(f"✅ Successfully subscribed to {success_count}/{len(self.working_symbols)} symbols")
-        
+
         if success_count > 0:
             logger.info("🎉 SYMBOLS INJECTED SUCCESSFULLY!")
             logger.info("✅ Check AmiBroker - all symbols should now be available!")
             logger.info("✅ OpenAlgo is now feeding real-time data to AmiBroker!")
-            
+
             # Keep the connection alive and listen for data
             await self.listen_for_data()
         else:
             logger.error("❌ Failed to inject any symbols")
-    
+
     async def listen_for_data(self):
         """Listen for real-time data from OpenAlgo"""
         logger.info("Listening for real-time data...")
-        
+
         try:
             while True:
                 message = await self.websocket.recv()
                 data = json.loads(message)
-                
+
                 # Log incoming data (you can remove this if too verbose)
                 if "ltp" in str(data).lower():
                     logger.info(f"📊 Data received: {data}")
-                
+
         except websockets.exceptions.ConnectionClosed:
             logger.warning("WebSocket connection closed")
         except Exception as e:
             logger.error(f"Error listening for data: {e}")
-    
+
     async def run(self):
         """Main run loop"""
         try:
             # Find all symbols first
             await self.find_all_symbols()
-            
+
             # Connect to WebSocket
             if not await self.connect():
                 return
-            
+
             # Authenticate
             if not await self.authenticate():
                 return
-            
+
             # Inject all symbols
             await self.inject_all_symbols()
-            
+
         except KeyboardInterrupt:
             logger.info("Shutting down...")
         except Exception as e:

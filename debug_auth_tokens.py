@@ -19,9 +19,9 @@ def check_auth_tokens():
     try:
         # Query all auth tokens
         auth_tokens = Auth.query.all()
-        
+
         print(f"Found {len(auth_tokens)} auth token(s) in database:")
-        
+
         for i, auth in enumerate(auth_tokens):
             print(f"\nAuth Token {i+1}:")
             print(f"  Name: {auth.name}")
@@ -30,9 +30,9 @@ def check_auth_tokens():
             print(f"  Feed Token: {auth.feed_token[:50] if auth.feed_token else 'None'}")
             print(f"  Created: {auth.created_at}")
             print(f"  Is Revoked: {auth.is_revoked}")
-        
+
         return len(auth_tokens) > 0
-        
+
     except Exception as e:
         logger.error(f"Error checking auth tokens: {e}")
         return False
@@ -40,10 +40,10 @@ def check_auth_tokens():
 def main():
     """Main function."""
     print("Checking auth tokens in OpenAlgo database...")
-    
+
     # Initialize database
     init_db()
-    
+
     # Check auth tokens
     if check_auth_tokens():
         print("\n✅ Auth tokens found in database!")

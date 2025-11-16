@@ -119,7 +119,7 @@
 🚀 Starting comprehensive OpenAlgo API endpoint tests...
 
 📡 Testing Utility APIs... ✅ 3/3
-📊 Testing Account & Portfolio APIs... ✅ 6/6  
+📊 Testing Account & Portfolio APIs... ✅ 6/6
 📈 Testing Market Data APIs... ✅ 7/7
 📋 Testing Order Management APIs... ✅ 8/8
 💹 Testing Margin Calculation... ✅ 1/1

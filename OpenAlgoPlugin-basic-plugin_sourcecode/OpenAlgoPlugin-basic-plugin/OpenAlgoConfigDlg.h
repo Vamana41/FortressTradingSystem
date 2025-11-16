@@ -58,7 +58,7 @@ private:
 	BOOL SendWebSocketFrame(SOCKET sock, const CString& message);
 	CString DecodeWebSocketFrame(const char* buffer, int length);
 	void GenerateMaskKey(unsigned char* maskKey);
-	
+
 	// WebSocket related members
 	CString m_wsUrl;
 	BOOL m_bWebSocketConnected;

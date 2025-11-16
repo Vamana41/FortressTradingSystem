@@ -47,7 +47,7 @@ struct QuoteData {
     double volume;
     double oi;
     std::chrono::steady_clock::time_point timestamp;
-    
+
     QuoteData() : ltp(0), open(0), high(0), low(0), close(0), volume(0), oi(0) {}
 };
 
@@ -69,7 +69,7 @@ static void UpdateCache(const std::string& symbol, const QuoteData& data);
 PLUGINAPI int Init(void)
 {
     if (g_initialized) return 1;
-    
+
     // Load configuration from registry
     HKEY hKey;
     if (RegOpenKeyEx(HKEY_CURRENT_USER, TEXT("Software\\OpenAlgoRelay"), 0, KEY_READ, &hKey) == ERROR_SUCCESS)
@@ -77,33 +77,33 @@ PLUGINAPI int Init(void)
         char buffer[256];
         DWORD bufferSize = sizeof(buffer);
         DWORD dwType;
-        
+
         // Read server
         if (RegQueryValueExA(hKey, "Server", NULL, &dwType, (LPBYTE)buffer, &bufferSize) == ERROR_SUCCESS)
             g_server = buffer;
-            
+
         // Read port
         DWORD portValue;
         bufferSize = sizeof(DWORD);
         if (RegQueryValueExA(hKey, "Port", NULL, &dwType, (LPBYTE)&portValue, &bufferSize) == ERROR_SUCCESS)
             g_port = portValue;
-            
+
         // Read API key
         bufferSize = sizeof(buffer);
         if (RegQueryValueExA(hKey, "ApiKey", NULL, &dwType, (LPBYTE)buffer, &bufferSize) == ERROR_SUCCESS)
             g_api_key = buffer;
-            
+
         RegCloseKey(hKey);
     }
-    
+
     // Initialize Winsock
     if (!InitializeWinsock())
         return 0;
-    
+
     // Start connection thread
     g_connection_thread_running = true;
     g_connection_thread = std::thread(ConnectionThreadProc);
-    
+
     g_initialized = true;
     return 1;
 }
@@ -114,13 +114,13 @@ PLUGINAPI int Release(void)
     g_connection_thread_running = false;
     if (g_connection_thread.joinable())
         g_connection_thread.join();
-    
+
     // Disconnect from relay
     DisconnectFromRelay();
-    
+
     // Cleanup Winsock
     WSACleanup();
-    
+
     g_initialized = false;
     return 1;
 }
@@ -128,11 +128,11 @@ PLUGINAPI int Release(void)
 PLUGINAPI int GetQuotesEx(LPCTSTR pszTicker, int nPeriodicity, int nLastValid, int nSize, struct Quotation* pQuotes, GQEContext* pContext)
 {
     std::string symbol = CT2A(pszTicker);
-    
+
     // Return existing data if not connected (non-blocking behavior)
     if (!g_connected)
         return nLastValid + 1;
-    
+
     // Check cache first
     {
         std::lock_guard<std::mutex> lock(g_cache_mutex);
@@ -153,11 +153,11 @@ PLUGINAPI int GetQuotesEx(LPCTSTR pszTicker, int nPeriodicity, int nLastValid, i
             }
         }
     }
-    
+
     // Request fresh data from relay (non-blocking)
     std::string request = "{\"type\":\"get_quote\",\"symbol\":\"" + symbol + "\"}";
     SendToRelay(request);
-    
+
     // Return existing data to prevent blocking
     return nLastValid + 1;
 }
@@ -167,17 +167,17 @@ PLUGINAPI AmiVar GetExtraData(LPCTSTR pszTicker, LPCTSTR pszFieldName, int nFiel
     AmiVar result;
     result.type = VAR_FLOAT;
     result.val = 0;
-    
+
     std::string symbol = CT2A(pszTicker);
     std::string field = CT2A(pszFieldName);
     std::transform(field.begin(), field.end(), field.begin(), ::toupper);
-    
+
     {
         std::lock_guard<std::mutex> lock(g_cache_mutex);
         if (g_quote_cache.find(symbol) != g_quote_cache.end() && IsCacheValid(symbol))
         {
             const QuoteData& quote = g_quote_cache[symbol];
-            
+
             if (field == "LTP") result.val = quote.ltp;
             else if (field == "OPEN") result.val = quote.open;
             else if (field == "HIGH") result.val = quote.high;
@@ -187,7 +187,7 @@ PLUGINAPI AmiVar GetExtraData(LPCTSTR pszTicker, LPCTSTR pszFieldName, int nFiel
             else if (field == "OI") result.val = quote.oi;
         }
     }
-    
+
     return result;
 }
 
@@ -215,25 +215,25 @@ static bool InitializeWinsock()
 static bool ConnectToRelay()
 {
     std::lock_guard<std::mutex> lock(g_socket_mutex);
-    
+
     if (g_socket != INVALID_SOCKET)
         return true;
-    
+
     // Create socket
     g_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (g_socket == INVALID_SOCKET)
         return false;
-    
+
     // Set non-blocking mode
     u_long mode = 1;
     ioctlsocket(g_socket, FIONBIO, &mode);
-    
+
     // Resolve address
     struct sockaddr_in addr;
     addr.sin_family = AF_INET;
     addr.sin_port = htons(g_port);
     inet_pton(AF_INET, g_server.c_str(), &addr.sin_addr);
-    
+
     // Connect with timeout
     int result = connect(g_socket, (struct sockaddr*)&addr, sizeof(addr));
     if (result == SOCKET_ERROR)
@@ -245,16 +245,16 @@ static bool ConnectToRelay()
             g_socket = INVALID_SOCKET;
             return false;
         }
-        
+
         // Wait for connection with select
         fd_set writefds;
         FD_ZERO(&writefds);
         FD_SET(g_socket, &writefds);
-        
+
         struct timeval tv;
         tv.tv_sec = 2;  // 2 second timeout
         tv.tv_usec = 0;
-        
+
         if (select(0, NULL, &writefds, NULL, &tv) <= 0)
         {
             closesocket(g_socket);
@@ -262,7 +262,7 @@ static bool ConnectToRelay()
             return false;
         }
     }
-    
+
     // Send authentication
     std::string auth_msg = "{\"type\":\"auth\",\"api_key\":\"" + g_api_key + "\"}";
     if (!SendToRelay(auth_msg))
@@ -271,7 +271,7 @@ static bool ConnectToRelay()
         g_socket = INVALID_SOCKET;
         return false;
     }
-    
+
     g_connected = true;
     return true;
 }
@@ -279,9 +279,9 @@ static bool ConnectToRelay()
 static void DisconnectFromRelay()
 {
     std::lock_guard<std::mutex> lock(g_socket_mutex);
-    
+
     g_connected = false;
-    
+
     if (g_socket != INVALID_SOCKET)
     {
         closesocket(g_socket);
@@ -306,7 +306,7 @@ static void ConnectionThreadProc()
                     {
                         ProcessRelayMessage(message);
                     }
-                    
+
                     // Process send queue
                     {
                         std::lock_guard<std::mutex> lock(g_send_queue_mutex);
@@ -317,7 +317,7 @@ static void ConnectionThreadProc()
                             SendToRelay(msg);
                         }
                     }
-                    
+
                     std::this_thread::sleep_for(std::chrono::milliseconds(10));
                 }
             }
@@ -338,13 +338,13 @@ static void ConnectionThreadProc()
 static bool SendToRelay(const std::string& message)
 {
     std::lock_guard<std::mutex> lock(g_socket_mutex);
-    
+
     if (g_socket == INVALID_SOCKET)
         return false;
-    
+
     // Add newline delimiter
     std::string msg = message + "\n";
-    
+
     int result = send(g_socket, msg.c_str(), msg.length(), 0);
     return result != SOCKET_ERROR;
 }
@@ -352,13 +352,13 @@ static bool SendToRelay(const std::string& message)
 static bool ReceiveFromRelay(std::string& message)
 {
     std::lock_guard<std::mutex> lock(g_socket_mutex);
-    
+
     if (g_socket == INVALID_SOCKET)
         return false;
-    
+
     char buffer[4096];
     int result = recv(g_socket, buffer, sizeof(buffer) - 1, 0);
-    
+
     if (result > 0)
     {
         buffer[result] = '\0';
@@ -371,7 +371,7 @@ static bool ReceiveFromRelay(std::string& message)
         g_connected = false;
         return false;
     }
-    
+
     return false;
 }
 
@@ -389,43 +389,43 @@ static void ProcessRelayMessage(const std::string& message)
             if (symbol_end != std::string::npos)
             {
                 std::string symbol = message.substr(symbol_pos, symbol_end - symbol_pos);
-                
+
                 // Extract price data
                 QuoteData quote;
-                
+
                 size_t ltp_pos = message.find("\"ltp\":");
                 if (ltp_pos != std::string::npos)
                 {
                     quote.ltp = std::stod(message.substr(ltp_pos + 6));
                     quote.close = quote.ltp;
                 }
-                
+
                 size_t open_pos = message.find("\"open\":");
                 if (open_pos != std::string::npos)
                 {
                     quote.open = std::stod(message.substr(open_pos + 7));
                 }
-                
+
                 size_t high_pos = message.find("\"high\":");
                 if (high_pos != std::string::npos)
                 {
                     quote.high = std::stod(message.substr(high_pos + 7));
                 }
-                
+
                 size_t low_pos = message.find("\"low\":");
                 if (low_pos != std::string::npos)
                 {
                     quote.low = std::stod(message.substr(low_pos + 6));
                 }
-                
+
                 size_t vol_pos = message.find("\"volume\":");
                 if (vol_pos != std::string::npos)
                 {
                     quote.volume = std::stod(message.substr(vol_pos + 9));
                 }
-                
+
                 quote.timestamp = std::chrono::steady_clock::now();
-                
+
                 // Update cache
                 UpdateCache(symbol, quote);
             }
@@ -438,10 +438,10 @@ static bool IsCacheValid(const std::string& symbol)
     auto it = g_quote_cache.find(symbol);
     if (it == g_quote_cache.end())
         return false;
-    
+
     auto now = std::chrono::steady_clock::now();
     auto age = std::chrono::duration_cast<std::chrono::seconds>(now - it->second.timestamp).count();
-    
+
     return age < 5;  // Valid for 5 seconds
 }
 
@@ -456,7 +456,7 @@ static double GetCurrentDateTime()
     // Return current time in AmiBroker format
     time_t now = time(NULL);
     struct tm* tm = localtime(&now);
-    
+
     // Pack datetime in AmiBroker format
     union AmiDate date;
     date.PackDate.Year = tm->tm_year + 1900;
@@ -465,6 +465,6 @@ static double GetCurrentDateTime()
     date.PackDate.Hour = tm->tm_hour;
     date.PackDate.Minute = tm->tm_min;
     date.PackDate.Second = tm->tm_sec;
-    
+
     return date.Date;
 }

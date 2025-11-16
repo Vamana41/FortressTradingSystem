@@ -9,20 +9,20 @@ import json
 
 def test_with_api_key(api_key):
     """Test all API endpoints with a valid API key."""
-    
+
     base_url = "http://127.0.0.1:5000/api/v1"
-    
+
     headers = {
         "Content-Type": "application/json",
         "api-key": api_key
     }
-    
+
     # Test ping endpoint
     print("Testing ping endpoint...")
     data = {"apikey": api_key}
     response = requests.post(f"{base_url}/ping", headers=headers, json=data)
     print(f"Ping: {response.status_code} - {response.text[:100]}")
-    
+
     # Test quotes endpoint
     print("\nTesting quotes endpoint...")
     data = {
@@ -32,13 +32,13 @@ def test_with_api_key(api_key):
     }
     response = requests.post(f"{base_url}/quotes", headers=headers, json=data)
     print(f"Quotes: {response.status_code} - {response.text[:100]}")
-    
+
     # Test funds endpoint
     print("\nTesting funds endpoint...")
     data = {"apikey": api_key}
     response = requests.post(f"{base_url}/funds", headers=headers, json=data)
     print(f"Funds: {response.status_code} - {response.text[:100]}")
-    
+
     # Test orderbook endpoint
     print("\nTesting orderbook endpoint...")
     data = {"apikey": api_key}

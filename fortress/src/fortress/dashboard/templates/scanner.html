@@ -17,13 +17,13 @@
                 <option value="">Select a scanner...</option>
             </select>
         </div>
-        
+
         <div class="control-group">
             <label for="symbols-input">Symbols (comma-separated):</label>
-            <textarea id="symbols-input" class="form-control" rows="3" 
+            <textarea id="symbols-input" class="form-control" rows="3"
                       placeholder="NIFTY50,BANKNIFTY,RELIANCE,TCS,INFY,HDFCBANK"></textarea>
         </div>
-        
+
         <div class="control-row">
             <div class="control-group">
                 <label for="timeframe-select">Timeframe:</label>
@@ -37,7 +37,7 @@
                     <option value="1w">1 Week</option>
                 </select>
             </div>
-            
+
             <div class="control-group">
                 <label>&nbsp;</label>
                 <div class="button-group">
@@ -50,10 +50,10 @@
                 </div>
             </div>
         </div>
-        
+
         <div class="control-group">
             <label for="custom-rules">Custom Rules (optional):</label>
-            <textarea id="custom-rules" class="form-control" rows="2" 
+            <textarea id="custom-rules" class="form-control" rows="2"
                       placeholder="Example: rsi_14 < 30 and volume > volume_sma * 1.5"></textarea>
         </div>
     </div>
@@ -78,7 +78,7 @@
                 <span id="signals-generated" class="status-value">0</span>
             </div>
         </div>
-        
+
         <div class="engine-controls">
             <button id="start-engine-btn" class="btn btn-success">
                 <i class="fas fa-power-off"></i> Start Engine
@@ -103,7 +103,7 @@
     <!-- Scan Results -->
     <div class="scanner-results">
         <h3><i class="fas fa-chart-line"></i> Scan Results</h3>
-        
+
         <!-- Progress Bar -->
         <div class="progress-container" id="progress-container" style="display: none;">
             <div class="progress">
@@ -116,7 +116,7 @@
                 <span id="progress-time">Est. time: --</span>
             </div>
         </div>
-        
+
         <!-- Results Table -->
         <div class="results-table-container">
             <table id="results-table" class="results-table">
@@ -139,7 +139,7 @@
                 </tbody>
             </table>
         </div>
-        
+
         <!-- Results Summary -->
         <div class="results-summary">
             <div class="summary-item">
@@ -592,16 +592,16 @@
         flex-direction: column;
         gap: 20px;
     }
-    
+
     .status-card {
         flex-wrap: wrap;
         justify-content: center;
     }
-    
+
     .control-row {
         flex-direction: column;
     }
-    
+
     .stats-grid {
         grid-template-columns: repeat(2, 1fr);
     }
@@ -616,16 +616,16 @@ class MarketScanner {
         this.prebuiltScanners = [];
         this.engineRunning = false;
         this.currentJobId = null;
-        
+
         this.initializeElements();
         this.bindEvents();
         this.loadPrebuiltScanners();
         this.updateStatus();
-        
+
         // Update status every 5 seconds
         setInterval(() => this.updateStatus(), 5000);
     }
-    
+
     initializeElements() {
         this.elements = {
             scannerSelect: document.getElementById('scanner-select'),
@@ -657,26 +657,26 @@ class MarketScanner {
             failedScans: document.getElementById('failed-scans')
         };
     }
-    
+
     bindEvents() {
         this.elements.startScanBtn.addEventListener('click', () => this.startScan());
         this.elements.stopScanBtn.addEventListener('click', () => this.stopScan());
         this.elements.startEngineBtn.addEventListener('click', () => this.startEngine());
         this.elements.stopEngineBtn.addEventListener('click', () => this.stopEngine());
         this.elements.clearCacheBtn.addEventListener('click', () => this.clearCache());
-        
+
         this.elements.scannerSelect.addEventListener('change', () => {
             if (this.elements.scannerSelect.value) {
                 this.loadScannerDetails(this.elements.scannerSelect.value);
             }
         });
     }
-    
+
     async loadPrebuiltScanners() {
         try {
             const response = await fetch('/api/scanner/prebuilt');
             const data = await response.json();
-            
+
             this.prebuiltScanners = data.scanners;
             this.populateScannerSelect();
         } catch (error) {
@@ -684,10 +684,10 @@ class MarketScanner {
             this.showError('Failed to load prebuilt scanners');
         }
     }
-    
+
     populateScannerSelect() {
         this.elements.scannerSelect.innerHTML = '<option value="">Select a scanner...</option>';
-        
+
         this.prebuiltScanners.forEach(scanner => {
             const option = document.createElement('option');
             option.value = scanner.name;
@@ -696,17 +696,17 @@ class MarketScanner {
             this.elements.scannerSelect.appendChild(option);
         });
     }
-    
+
     async loadScannerDetails(scannerName) {
         try {
             const response = await fetch(`/api/scanner/prebuilt/${scannerName}`);
             const scanner = await response.json();
-            
+
             // Auto-populate symbols if available
             if (scanner.default_symbols && scanner.default_symbols.length > 0) {
                 this.elements.symbolsInput.value = scanner.default_symbols.join(',');
             }
-            
+
             // Set timeframe if specified
             if (scanner.default_timeframe) {
                 this.elements.timeframeSelect.value = scanner.default_timeframe;
@@ -715,42 +715,42 @@ class MarketScanner {
             console.error('Failed to load scanner details:', error);
         }
     }
-    
+
     async startScan() {
         const scannerName = this.elements.scannerSelect.value;
         const symbolsText = this.elements.symbolsInput.value.trim();
         const timeframe = this.elements.timeframeSelect.value;
         const customRules = this.elements.customRules.value.trim();
-        
+
         if (!scannerName && !customRules) {
             this.showError('Please select a prebuilt scanner or enter custom rules');
             return;
         }
-        
+
         if (!symbolsText) {
             this.showError('Please enter symbols to scan');
             return;
         }
-        
+
         const symbols = symbolsText.split(',').map(s => s.trim()).filter(s => s);
-        
+
         try {
             const params = new URLSearchParams({
                 scanner_name: scannerName || 'custom',
                 symbols: symbols,
                 timeframe: timeframe
             });
-            
+
             if (customRules) {
                 params.append('custom_rules', customRules);
             }
-            
+
             const response = await fetch('/api/scanner/scan?' + params.toString(), {
                 method: 'POST'
             });
-            
+
             const result = await response.json();
-            
+
             if (response.ok) {
                 this.currentJobId = result.job_id;
                 this.elements.startScanBtn.disabled = true;
@@ -765,15 +765,15 @@ class MarketScanner {
             this.showError(error.message);
         }
     }
-    
+
     async stopScan() {
         if (!this.currentJobId) return;
-        
+
         try {
             const response = await fetch(`/api/scanner/jobs/${this.currentJobId}`, {
                 method: 'DELETE'
             });
-            
+
             if (response.ok) {
                 this.elements.startScanBtn.disabled = false;
                 this.elements.stopScanBtn.disabled = true;
@@ -785,15 +785,15 @@ class MarketScanner {
             this.showError('Failed to stop scan');
         }
     }
-    
+
     async startEngine() {
         try {
             const response = await fetch('/api/scanner/start', {
                 method: 'POST'
             });
-            
+
             const result = await response.json();
-            
+
             if (response.ok) {
                 this.engineRunning = true;
                 this.updateEngineControls();
@@ -806,15 +806,15 @@ class MarketScanner {
             this.showError(error.message);
         }
     }
-    
+
     async stopEngine() {
         try {
             const response = await fetch('/api/scanner/stop', {
                 method: 'POST'
             });
-            
+
             const result = await response.json();
-            
+
             if (response.ok) {
                 this.engineRunning = false;
                 this.updateEngineControls();
@@ -825,13 +825,13 @@ class MarketScanner {
             this.showError('Failed to stop engine');
         }
     }
-    
+
     async clearCache() {
         try {
             const response = await fetch('/api/scanner/cache/clear', {
                 method: 'POST'
             });
-            
+
             if (response.ok) {
                 this.showSuccess('Scanner cache cleared successfully');
             }
@@ -840,7 +840,7 @@ class MarketScanner {
             this.showError('Failed to clear cache');
         }
     }
-    
+
     async updateStatus() {
         try {
             // Update engine status and statistics
@@ -848,26 +848,26 @@ class MarketScanner {
                 fetch('/api/scanner/statistics'),
                 fetch('/api/scanner/jobs')
             ]);
-            
+
             if (statsResponse.ok && jobsResponse.ok) {
                 const stats = await statsResponse.json();
                 const jobs = await jobsResponse.json();
-                
+
                 // Update statistics
                 this.elements.totalScans.textContent = stats.statistics.total_scans;
                 this.elements.signalsGenerated.textContent = stats.statistics.signals_generated;
                 this.elements.avgScanTime.textContent = stats.statistics.average_scan_time.toFixed(1) + 's';
-                this.elements.successRate.textContent = 
-                    stats.statistics.total_scans > 0 
+                this.elements.successRate.textContent =
+                    stats.statistics.total_scans > 0
                         ? ((stats.statistics.successful_scans / stats.statistics.total_scans) * 100).toFixed(1) + '%'
                         : '0%';
                 this.elements.cacheSize.textContent = stats.cache_info.cache_size;
                 this.elements.failedScans.textContent = stats.statistics.failed_scans;
-                
+
                 // Update jobs
                 this.updateJobsDisplay(jobs.jobs);
                 this.elements.activeJobs.textContent = jobs.count;
-                
+
                 // Check if engine is running based on jobs activity
                 this.engineRunning = jobs.count > 0;
                 this.updateEngineControls();
@@ -876,10 +876,10 @@ class MarketScanner {
             console.error('Failed to update status:', error);
         }
     }
-    
+
     updateEngineControls() {
         const statusElement = this.elements.engineStatus;
-        
+
         if (this.engineRunning) {
             statusElement.textContent = 'Running';
             statusElement.className = 'status-value text-success';
@@ -892,22 +892,22 @@ class MarketScanner {
             this.elements.stopEngineBtn.disabled = true;
         }
     }
-    
+
     updateJobsDisplay(jobs) {
         const container = this.elements.jobsContainer;
-        
+
         if (jobs.length === 0) {
             container.innerHTML = '<div class="no-jobs">No active scan jobs</div>';
             return;
         }
-        
+
         container.innerHTML = jobs.map(job => this.createJobCard(job)).join('');
     }
-    
+
     createJobCard(job) {
         const statusClass = `status-${job.status}`;
         const progressWidth = job.progress || 0;
-        
+
         return `
             <div class="job-card">
                 <div class="job-header">
@@ -930,18 +930,18 @@ class MarketScanner {
             </div>
         `;
     }
-    
+
     async monitorJob(jobId) {
         this.elements.progressContainer.style.display = 'block';
-        
+
         const checkJob = async () => {
             try {
                 const response = await fetch(`/api/scanner/jobs/${jobId}`);
                 const job = await response.json();
-                
+
                 if (response.ok) {
                     this.updateProgress(job);
-                    
+
                     if (job.status === 'completed') {
                         this.displayResults(job.results || []);
                         this.elements.startScanBtn.disabled = false;
@@ -962,7 +962,7 @@ class MarketScanner {
                         this.currentJobId = null;
                         return; // Stop monitoring
                     }
-                    
+
                     // Continue monitoring
                     setTimeout(checkJob, 2000);
                 }
@@ -970,16 +970,16 @@ class MarketScanner {
                 console.error('Failed to monitor job:', error);
             }
         };
-        
+
         checkJob();
     }
-    
+
     updateProgress(job) {
         const progress = job.progress || 0;
         this.elements.scanProgress.style.width = `${progress}%`;
         this.elements.progressText.textContent = `${progress.toFixed(1)}%`;
         this.elements.progressSymbols.textContent = `${job.symbols_processed} / ${job.symbols_total} symbols processed`;
-        
+
         // Estimate remaining time
         if (job.symbols_processed > 0 && job.symbols_processed < job.symbols_total) {
             const elapsed = (new Date() - new Date(job.start_time)) / 1000;
@@ -988,34 +988,34 @@ class MarketScanner {
             this.elements.progressTime.textContent = `Est. time: ${this.formatTime(remaining)}`;
         }
     }
-    
+
     displayResults(results) {
         const tbody = this.elements.resultsTbody;
-        
+
         if (results.length === 0) {
             tbody.innerHTML = '<tr class="no-results"><td colspan="8">No signals found for this scan.</td></tr>';
             this.updateResultsSummary(0, 0);
             return;
         }
-        
+
         let buyCount = 0;
         let sellCount = 0;
-        
+
         tbody.innerHTML = results.map(result => {
             if (result.signal === 'BUY') buyCount++;
             if (result.signal === 'SELL') sellCount++;
-            
+
             return this.createResultRow(result);
         }).join('');
-        
+
         this.updateResultsSummary(buyCount, sellCount);
     }
-    
+
     createResultRow(result) {
         const signalClass = result.signal === 'BUY' ? 'buy-signal' : 'sell-signal';
         const strengthClass = this.getStrengthClass(result.strength);
         const time = new Date(result.timestamp).toLocaleTimeString();
-        
+
         return `
             <tr>
                 <td><strong>${result.symbol}</strong></td>
@@ -1033,48 +1033,48 @@ class MarketScanner {
             </tr>
         `;
     }
-    
+
     getStrengthClass(strength) {
         if (strength >= 0.8) return 'strength-high';
         if (strength >= 0.6) return 'strength-medium';
         return 'strength-low';
     }
-    
+
     updateResultsSummary(buyCount, sellCount) {
         this.elements.buyCount.textContent = buyCount;
         this.elements.sellCount.textContent = sellCount;
         this.elements.totalResults.textContent = buyCount + sellCount;
     }
-    
+
     formatTime(seconds) {
         if (seconds < 60) return `${Math.round(seconds)}s`;
         if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
         return `${Math.round(seconds / 3600)}h`;
     }
-    
+
     viewChart(symbol) {
         // Placeholder for chart viewing functionality
         this.showInfo(`Chart view for ${symbol} - Coming soon!`);
     }
-    
+
     showSuccess(message) {
         this.showNotification(message, 'success');
     }
-    
+
     showError(message) {
         this.showNotification(message, 'error');
     }
-    
+
     showInfo(message) {
         this.showNotification(message, 'info');
     }
-    
+
     showNotification(message, type) {
         // Create notification element
         const notification = document.createElement('div');
         notification.className = `notification notification-${type}`;
         notification.textContent = message;
-        
+
         // Style the notification
         notification.style.cssText = `
             position: fixed;
@@ -1090,7 +1090,7 @@ class MarketScanner {
             transform: translateX(100%);
             transition: transform 0.3s ease;
         `;
-        
+
         // Set background color based on type
         const colors = {
             success: '#27ae60',
@@ -1098,14 +1098,14 @@ class MarketScanner {
             info: '#3498db'
         };
         notification.style.backgroundColor = colors[type] || colors.info;
-        
+
         document.body.appendChild(notification);
-        
+
         // Animate in
         setTimeout(() => {
             notification.style.transform = 'translateX(0)';
         }, 100);
-        
+
         // Remove after 5 seconds
         setTimeout(() => {
             notification.style.transform = 'translateX(100%)';

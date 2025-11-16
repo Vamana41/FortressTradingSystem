@@ -23,10 +23,10 @@ async def test_integration():
     """Test the OpenAlgo integration"""
     print("Testing OpenAlgo Symbol Injector Integration...")
     print("=" * 60)
-    
+
     # Create injector instance
     injector = OpenAlgoSymbolInjector()
-    
+
     # Test API key availability
     print("1. Testing API key access...")
     api_key_available = await injector.get_api_key_from_fortress()
@@ -37,7 +37,7 @@ async def test_integration():
         print("   Please ensure you have set the OPENALGO_API_KEY environment variable")
         print("   or that the Fortress API key manager has the key stored.")
         return False
-    
+
     # Test OpenAlgo connectivity
     print("\n2. Testing OpenAlgo connectivity...")
     try:
@@ -48,7 +48,7 @@ async def test_integration():
         else:
             print("   ✗ Failed to get Nifty LTP")
             return False
-        
+
         # Test getting BankNifty LTP
         banknifty_ltp = await injector.get_index_ltp("NSE:NIFTYBANK-INDEX")
         if banknifty_ltp:
@@ -56,11 +56,11 @@ async def test_integration():
         else:
             print("   ✗ Failed to get BankNifty LTP")
             return False
-            
+
     except Exception as e:
         print(f"   ✗ Error testing OpenAlgo connectivity: {e}")
         return False
-    
+
     # Test option chain retrieval
     print("\n3. Testing option chain retrieval...")
     try:
@@ -75,11 +75,11 @@ async def test_integration():
         else:
             print("   ✗ Failed to get Nifty option chain")
             return False
-            
+
     except Exception as e:
         print(f"   ✗ Error testing option chain retrieval: {e}")
         return False
-    
+
     # Test ATM selection logic
     print("\n4. Testing ATM selection logic...")
     try:
@@ -94,7 +94,7 @@ async def test_integration():
         else:
             print("   ✗ Failed to select Nifty ATM symbols")
             return False
-        
+
         # Test BankNifty ATM selection
         banknifty_symbols = await injector.select_and_subscribe_atm_options(
             "NSE:NIFTYBANK-INDEX", "BANKNIFTY", 100
@@ -106,18 +106,18 @@ async def test_integration():
         else:
             print("   ✗ Failed to select BankNifty ATM symbols")
             return False
-            
+
     except Exception as e:
         print(f"   ✗ Error testing ATM selection logic: {e}")
         return False
-    
+
     # Test relay server connection
     print("\n5. Testing relay server connection...")
     try:
         connected = await injector.connect_to_relay_server()
         if connected:
             print("   ✓ Successfully connected to relay server")
-            
+
             # Test symbol discovery
             test_symbols = list(nifty_symbols.values()) + list(banknifty_symbols.values())
             if test_symbols:
@@ -129,11 +129,11 @@ async def test_integration():
             print("   ✗ Failed to connect to relay server")
             print("   Please ensure your relay server is running on ws://localhost:10102")
             return False
-            
+
     except Exception as e:
         print(f"   ✗ Error testing relay server connection: {e}")
         return False
-    
+
     print("\n" + "=" * 60)
     print("✓ All tests passed! The integration is working correctly.")
     print("\nNext steps:")
@@ -141,14 +141,14 @@ async def test_integration():
     print("2. Ensure your relay server is running on ws://localhost:10102")
     print("3. Run the main script: python openalgo_symbol_injector.py")
     print("4. The system will automatically select ATM options at 09:13:15 daily")
-    
+
     return True
 
 async def main():
     """Main test function"""
     print("OpenAlgo Symbol Injector - Integration Test")
     print("=" * 60)
-    
+
     try:
         success = await test_integration()
         if success:
@@ -157,7 +157,7 @@ async def main():
         else:
             print("\n❌ Integration test failed!")
             return 1
-            
+
     except KeyboardInterrupt:
         print("\n\nTest interrupted by user")
         return 1

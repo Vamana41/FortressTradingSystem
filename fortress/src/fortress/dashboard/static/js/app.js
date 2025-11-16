@@ -15,16 +15,16 @@ function updateSystemSummary(d){
   const g=document.getElementById('sys-signals');
   const indicator=document.getElementById('sys-status-indicator');
   const uptime=document.getElementById('sys-uptime');
-  
+
   if(h)h.textContent=d.healthy?"yes":"no";
   if(s)s.textContent=d.strategies;
   if(p)p.textContent=d.positions;
   if(g)g.textContent=d.processed_signals;
-  
+
   if(indicator){
     indicator.className='status-indicator '+(d.healthy?'status-online':'status-offline');
   }
-  
+
   if(uptime && d.startup_time){
     const uptimeMs=Date.now()-new Date(d.startup_time).getTime();
     uptime.textContent=formatUptime(uptimeMs);
@@ -36,7 +36,7 @@ function formatUptime(ms){
   const minutes=Math.floor(seconds/60);
   const hours=Math.floor(minutes/60);
   const days=Math.floor(hours/24);
-  
+
   if(days>0)return`${days}d ${hours%24}h`;
   if(hours>0)return`${hours}h ${minutes%60}m`;
   if(minutes>0)return`${minutes}m ${seconds%60}s`;
@@ -47,13 +47,13 @@ function renderPositions(items){
   const tbody=document.getElementById('positionsBody');
   if(!tbody)return;
   tbody.innerHTML='';
-  
+
   let totalPnl=0;
   for(const it of items){
     const pnl=(it.realized_pnl||0)+(it.unrealized_pnl||0);
     totalPnl+=pnl;
     const pnlPercent=it.average_price>0?((pnl/(Math.abs(it.net_quantity)*it.average_price))*100):0;
-    
+
     const tr=document.createElement('tr');
     tr.innerHTML=`
       <td><strong>${it.symbol}</strong></td>
@@ -65,7 +65,7 @@ function renderPositions(items){
     `;
     tbody.appendChild(tr)
   }
-  
+
   // Update active symbols count
   document.getElementById('active-symbols').textContent=items.length;
 }
@@ -74,7 +74,7 @@ function renderSignals(items){
   const list=document.getElementById('signalsList');
   if(!list)return;
   list.innerHTML='';
-  
+
   // Update signal rate
   if(items.length>0){
     signalCount+=items.length;
@@ -84,18 +84,18 @@ function renderSignals(items){
       document.getElementById('signal-rate').textContent=`${rate}/min`;
     }
   }
-  
+
   for(const s of items.slice(0,10)){ // Show only last 10 signals
     const el=document.createElement('div');
     el.className='list-group-item';
     const signalType=s.final_signal?.signal_type||'';
     const strength=s.final_signal?.strength||0;
     const timestamp=new Date(s.timestamp).toLocaleTimeString();
-    
+
     el.innerHTML=`
       <div class="d-flex justify-content-between align-items-center">
         <div>
-          <strong>${s.symbol}</strong> 
+          <strong>${s.symbol}</strong>
           <span class="badge ${getSignalBadgeClass(signalType)}">${signalType}</span>
         </div>
         <small class="text-muted">${timestamp}</small>
@@ -109,7 +109,7 @@ function renderSignals(items){
     `;
     list.appendChild(el)
   }
-  
+
   // Update last update time
   document.getElementById('last-update').textContent=new Date().toLocaleTimeString();
 }
@@ -134,7 +134,7 @@ let pnlChart;
 function initCharts(){
   const ctx=document.getElementById('pnlChart');
   if(!ctx)return;
-  
+
   pnlChart=new Chart(ctx,{
     type:'line',
     data:{
@@ -189,17 +189,17 @@ function initCharts(){
 
 function pushPnlPoint(realized,unrealized){
   if(!pnlChart)return;
-  
+
   const total=(realized||0)+(unrealized||0);
   const now=new Date();
   const timeLabel=now.toLocaleTimeString();
-  
+
   // Update data arrays
   pnlData.labels.push(timeLabel);
   pnlData.realized.push(realized||0);
   pnlData.unrealized.push(unrealized||0);
   pnlData.total.push(total);
-  
+
   // Keep only last 120 points
   if(pnlData.labels.length>120){
     pnlData.labels.shift();
@@ -207,15 +207,15 @@ function pushPnlPoint(realized,unrealized){
     pnlData.unrealized.shift();
     pnlData.total.shift();
   }
-  
+
   // Update chart
   pnlChart.data.labels=pnlData.labels;
   pnlChart.data.datasets[0].data=pnlData.total;
   pnlChart.data.datasets[1].data=pnlData.realized;
   pnlChart.data.datasets[2].data=pnlData.unrealized;
-  
+
   pnlChart.update('none'); // Update without animation
-  
+
   // Update P&L summary
   updatePnlSummary(realized,unrealized,total);
 }
@@ -225,11 +225,11 @@ function updatePnlSummary(realized,unrealized,total){
   const unrealizedEl=document.getElementById('pnl-unrealized');
   const totalEl=document.getElementById('pnl-total');
   const progressEl=document.getElementById('pnl-progress');
-  
+
   if(realizedEl)realizedEl.textContent=`₹${(realized||0).toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
   if(unrealizedEl)unrealizedEl.textContent=`₹${(unrealized||0).toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
   if(totalEl)totalEl.textContent=`₹${(total||0).toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
-  
+
   // Update progress bar (assuming max P&L of ₹100,000 for demo)
   const maxPnl=100000;
   const progressPercent=Math.min(Math.abs(total)/maxPnl*100,100);
@@ -248,13 +248,13 @@ async function refresh(){
       fetchJSON('/api/pnl'),
       fetchJSON('/api/risk')
     ]);
-    
+
     updateSystemSummary(st);
     renderPositions(pos.positions||[]);
     renderSignals(sig.signals||[]);
     pushPnlPoint(pnl.realized,pnl.unrealized);
     updateRiskMetrics(risk);
-    
+
   }catch(error){
     console.error('Failed to refresh dashboard:',error);
   }
@@ -264,20 +264,20 @@ function updateRiskMetrics(riskData){
   const riskLevelEl=document.getElementById('risk-level');
   const maxDrawdownEl=document.getElementById('max-drawdown');
   const sharpeRatioEl=document.getElementById('sharpe-ratio');
-  
+
   if(riskData.risk_state){
     const riskLevel=riskData.risk_state.risk_level||'unknown';
     if(riskLevelEl){
       riskLevelEl.textContent=riskLevel.toUpperCase();
       riskLevelEl.className=`badge bg-${getRiskColor(riskLevel)}`;
     }
-    
+
     if(maxDrawdownEl){
       const drawdown=riskData.portfolio_state?.drawdown||0;
       maxDrawdownEl.textContent=`${drawdown.toFixed(2)}%`;
       maxDrawdownEl.className=`fw-bold ${drawdown<-5?'text-danger':'text-success'}`;
     }
-    
+
     if(sharpeRatioEl){
       const sharpe=riskData.portfolio_state?.sharpe_ratio||0;
       sharpeRatioEl.textContent=sharpe.toFixed(2);
@@ -296,13 +296,13 @@ function getRiskColor(riskLevel){
 
 function setChartPeriod(period){
   currentChartPeriod=period;
-  
+
   // Update button states
   document.querySelectorAll('.btn-group .btn').forEach(btn=>{
     btn.classList.remove('active');
   });
   event.target.classList.add('active');
-  
+
   // Clear existing data and reload
   pnlData={labels:[],realized:[],unrealized:[],total:[]};
   if(pnlChart){
@@ -320,7 +320,7 @@ function exportData(){
     signalCount:signalCount,
     chartPeriod:currentChartPeriod
   };
-  
+
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
@@ -335,11 +335,11 @@ function exportData(){
 function connectWS(){
   try{
     const ws=new WebSocket((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/ws/events');
-    
+
     ws.onmessage=(ev)=>{
       try{
         const data=JSON.parse(ev.data);
-        
+
         // Handle different event types
         switch(data.event_type){
           case'position.updated':
@@ -354,7 +354,7 @@ function connectWS(){
         console.error('WebSocket message error:',error);
       }
     };
-    
+
     ws.onopen=()=>{
       console.log('WebSocket connected');
       // Send heartbeat every 30 seconds
@@ -368,17 +368,17 @@ function connectWS(){
         }
       },30000);
     };
-    
+
     ws.onerror=(error)=>{
       console.error('WebSocket error:',error);
     };
-    
+
     ws.onclose=()=>{
       console.log('WebSocket disconnected');
       // Attempt to reconnect after 5 seconds
       setTimeout(connectWS,5000);
     };
-    
+
   }catch(error){
     console.error('Failed to connect WebSocket:',error);
   }
@@ -388,10 +388,10 @@ window.addEventListener('DOMContentLoaded',async()=>{
   initCharts();
   await refresh();
   connectWS();
-  
+
   // Refresh every 5 seconds
   setInterval(refresh,5000);
-  
+
   // Reset signal count every minute
   setInterval(()=>{
     signalCount=0;

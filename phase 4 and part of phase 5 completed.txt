@@ -204,7 +204,7 @@ Execute Phase 4 testing using the created framework:
 
 python phase4_integration_test_plan.py --paper-trading --verbose
 
-The Fortress Trading System is now fully analyzed, cleaned, and ready for comprehensive integration testing. All components are verified, the codebase is optimized, and a complete testing roadmap is in place for production deployment. 
+The Fortress Trading System is now fully analyzed, cleaned, and ready for comprehensive integration testing. All components are verified, the codebase is optimized, and a complete testing roadmap is in place for production deployment.
 
 
 
@@ -365,7 +365,7 @@ Please provide your Fyers API credentials in the openalgo/.env file:
 
 # Fyers API Configuration (REQUIRED FOR LIVE TRADING)
 FYERS_APP_ID = "your_fyers_app_id_here"
-FYERS_SECRET_KEY = "your_fyers_secret_key_here"  
+FYERS_SECRET_KEY = "your_fyers_secret_key_here"
 FYERS_REDIRECT_URI = "http://127.0.0.1:5000/fyers/callback"
 FYERS_AUTH_CODE = "your_fyers_authorization_code_here"
 

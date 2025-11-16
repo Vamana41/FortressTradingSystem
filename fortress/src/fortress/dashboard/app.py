@@ -65,10 +65,10 @@ async def on_startup():
     await subscribe_to_event(EventType.RISK_CHECK_FAILED, _on_event, bus_name="fortress")
     await subscribe_to_event(EventType.ERROR_OCCURRED, _on_event, bus_name="fortress")
     await start_event_consumers("fortress")
-    
+
     # Start performance monitoring
     await performance_monitor.start_monitoring(interval_seconds=30)
-    
+
     brain = get_brain()
     if brain:
         logger.info("Dashboard connected to brain", brain_id=brain.brain_id)

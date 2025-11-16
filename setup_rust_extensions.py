@@ -12,13 +12,13 @@ setup(
             binding=Binding.PyO3
         ),
         RustExtension(
-            "fortress_rust.data_structures", 
+            "fortress_rust.data_structures",
             path="src/data_structures/Cargo.toml",
             binding=Binding.PyO3
         ),
         RustExtension(
             "fortress_rust.market_data",
-            path="src/market_data/Cargo.toml", 
+            path="src/market_data/Cargo.toml",
             binding=Binding.PyO3
         )
     ],

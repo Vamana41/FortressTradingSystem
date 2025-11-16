@@ -6,7 +6,7 @@ from .symbol_repository import SymbolRepository
 
 __all__ = [
     "SymbolManager",
-    "SymbolInfo", 
+    "SymbolInfo",
     "FuturesContract",
     "RolloverConfig",
     "ContractRolloverManager",

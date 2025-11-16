@@ -13,12 +13,12 @@ logger = get_logger(__name__)
 
 class SymbolRepository:
     """Repository for symbol data persistence."""
-    
+
     def __init__(self, db_path: str = "data/symbols.db"):
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._initialize_database()
-    
+
     def _initialize_database(self) -> None:
         """Initialize the database with required tables."""
         with sqlite3.connect(self.db_path) as conn:
@@ -38,7 +38,7 @@ class SymbolRepository:
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
-            
+
             # Create futures contracts table
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS futures_contracts (
@@ -55,16 +55,16 @@ class SymbolRepository:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
-            
+
             conn.commit()
             logger.info("Database initialized", db_path=str(self.db_path))
-    
+
     def save_symbol(self, symbol_data: Dict[str, Any]) -> None:
         """Save symbol information to database."""
         with sqlite3.connect(self.db_path) as conn:
             conn.execute("""
-                INSERT OR REPLACE INTO symbols 
-                (symbol, name, symbol_type, exchange, lot_size, tick_size, 
+                INSERT OR REPLACE INTO symbols
+                (symbol, name, symbol_type, exchange, lot_size, tick_size,
                  margin_required, is_active, metadata, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
             """, (
@@ -80,7 +80,7 @@ class SymbolRepository:
             ))
             conn.commit()
             logger.info("Symbol saved", symbol=symbol_data['symbol'])
-    
+
     def load_symbol(self, symbol: str) -> Optional[Dict[str, Any]]:
         """Load symbol information from database."""
         with sqlite3.connect(self.db_path) as conn:
@@ -89,7 +89,7 @@ class SymbolRepository:
                        margin_required, is_active, metadata
                 FROM symbols WHERE symbol = ?
             """, (symbol,))
-            
+
             row = cursor.fetchone()
             if row:
                 return {
@@ -104,7 +104,7 @@ class SymbolRepository:
                     'metadata': json.loads(row[8])
                 }
             return None
-    
+
     def save_futures_contract(self, contract_data: Dict[str, Any]) -> None:
         """Save futures contract to database."""
         with sqlite3.connect(self.db_path) as conn:
@@ -127,7 +127,7 @@ class SymbolRepository:
             ))
             conn.commit()
             logger.info("Futures contract saved", symbol=contract_data['symbol'])
-    
+
     def load_expiring_contracts(self, days_ahead: int = 30) -> List[Dict[str, Any]]:
         """Load contracts expiring within specified days."""
         with sqlite3.connect(self.db_path) as conn:
@@ -139,7 +139,7 @@ class SymbolRepository:
                 AND status = 'active'
                 ORDER BY expiry_date
             """, (days_ahead,))
-            
+
             contracts = []
             for row in cursor.fetchall():
                 contracts.append({
@@ -152,6 +152,6 @@ class SymbolRepository:
                     'margin_required': row[6],
                     'status': row[7]
                 })
-            
+
             logger.info("Loaded expiring contracts", count=len(contracts), days_ahead=days_ahead)
             return contracts

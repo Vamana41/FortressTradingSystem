@@ -347,7 +347,7 @@ def watch_for_signals():
 if __name__ == "__main__":
     synchronize_with_broker()
     perform_daily_symbol_management()
-    
+
     print("Fortress Brain is live. Watching for signals...")
     while True:
         watch_for_signals()
@@ -387,7 +387,7 @@ def execute_sliced_trade(job):
 
         # --- THE CORE ACTION: Talk to OpenAlgo, NOT Fyers ---
         response = requests.post("http://localhost:8080/api/v1/orders/place", json=order_data)
-        
+
         # (Your logic to poll OpenAlgo's /orders endpoint to check the status)
         if order_failed:
             # Create a new job to reverse the damage
@@ -401,7 +401,7 @@ if __name__ == "__main__":
         # "blpop" waits efficiently for a job, using almost no CPU.
         job_data = redis_client.blpop("trade_queue")[1] # [1] gets the actual data
         job = json.loads(job_data)
-        
+
         print(f"Worker picked up job: {job}")
         execute_sliced_trade(job)
 What This New Architecture Achieves:
@@ -1003,7 +1003,7 @@ def start_worker_loop():
             except Exception as e:
                 logging.critical(f"FATAL ERROR executing job: {job}")
                 logging.critical(f"Exception details: {e}", exc_info=True)
-                
+
                 # --- This is the Dead-Letter Queue in action ---
                 # The job failed. We move it to a different queue for manual inspection.
                 redis_client.rpush('dead_letter_queue', job_string)

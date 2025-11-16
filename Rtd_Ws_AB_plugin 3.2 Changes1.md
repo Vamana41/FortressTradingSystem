@@ -96,7 +96,7 @@ def perform_fyers_login() -> Optional[fyersModel.FyersModel]:
     if not all([FYERS_APP_ID, FYERS_SECRET_KEY, FYERS_REDIRECT_URI, FYERS_AUTH_CODE]):
         logger.critical("Fyers credentials missing in .env file.")
         return None
-    
+
     session = fyersModel.SessionModel(
         client_id=FYERS_APP_ID,
         secret_key=FYERS_SECRET_KEY,
@@ -105,13 +105,13 @@ def perform_fyers_login() -> Optional[fyersModel.FyersModel]:
         grant_type="authorization_code"
     )
     session.set_token(FYERS_AUTH_CODE)
-    
+
     try:
         response = session.generate_token()
         if response.get("s") == "ok" and "access_token" in response:
             logger.info("Fyers Access Token generated successfully for Strategist.")
             access_token = response["access_token"]
-            
+
             client = fyersModel.FyersModel(
                 client_id=FYERS_APP_ID,
                 token=access_token,
@@ -143,15 +143,15 @@ def handle_signal_event(signal: Dict[str, Any], pub_socket: zmq.Socket) -> None:
     symbol = signal.get("symbol")
     action = signal.get("action")
     price = signal.get("price")
-    
+
     if not all([symbol, action, price]):
         logger.warning(f"Malformed signal received and ignored: {signal}")
         return
 
     logger.info(f"Strategist processing signal: {action} {symbol} @ {price}")
-    
+
     lot_size = get_lot_size(symbol)
-    
+
     # --- The Margin Inquisition ---
     try:
         proposed_order = {
@@ -160,30 +160,30 @@ def handle_signal_event(signal: Dict[str, Any], pub_socket: zmq.Socket) -> None:
             "quantity": lot_size, # Calculate margin for a single lot
             "product": "MIS"
         }
-        
+
         # This is the blocking API call to the OpenAlgo/Fyers Margin API
         margin_requirements = fyers_api_client.margin(orders=[proposed_order])
-        
+
         if not margin_requirements or margin_requirements.get("s") != "ok":
             logger.error(f"Margin API call failed: {margin_requirements.get('message')}")
             return
-            
+
         data = margin_requirements.get("data", {})
         available_margin = data.get("available_margin", 0.0)
         required_per_lot = data.get("required_margin", 0.0)
-        
+
         if required_per_lot <= 0:
             logger.error(f"Margin API returned invalid required_margin: {required_per_lot}")
             return
-            
+
         # --- Intelligent Sizing ---
         available_for_trade = available_margin * CAPITAL_ALLOCATION_PERCENT
         max_lots = math.floor(available_for_trade / required_per_lot)
-        
+
         if max_lots == 0:
             logger.warning(f"Margin Inquisition Failed: Insufficient funds for {symbol}. Available: {available_margin}, Required: {required_per_lot}")
             return
-            
+
         final_quantity = max_lots * lot_size
         logger.info(f"Margin Inquisition Passed: Available: {available_margin}, Allocating: {available_for_trade}, Required/Lot: {required_per_lot}. Max Lots: {max_lots}")
 
@@ -195,7 +195,7 @@ def handle_signal_event(signal: Dict[str, Any], pub_socket: zmq.Socket) -> None:
             "order_type": "MARKET",
             "source": "StrategistV2.1"
         }
-        
+
         topic = "events.order.execute"
         pub_socket.send_string(f"{topic} {json.dumps(order_event)}")
         logger.warning(f"PUBLISHED to Executioner: {topic} {order_event}")
@@ -208,34 +208,34 @@ def main() -> None:
     """Main loop for the Strategist."""
     global fyers_api_client
     fyers_api_client = perform_fyers_login()
-    
+
     if not fyers_api_client:
         logger.critical("Could not log into Fyers. Strategist will not run.")
         return
 
     context = zmq.Context()
-    
+
     # Socket to receive signals
     sub_socket = context.socket(zmq.SUB)
     sub_socket.connect(ZMQ_SUB_URL)
     sub_socket.subscribe("events.signal.") # Subscribe to all signal events
-    
+
     # Socket to publish orders
     pub_socket = context.socket(zmq.PUB)
     pub_socket.connect(ZMQ_PUB_URL)
-    
+
     logger.info(f"Strategist is online. Subscribed to signals on {ZMQ_SUB_URL}. Publishing orders to {ZMQ_PUB_URL}.")
 
     try:
         while True:
             string = sub_socket.recv_string()
             topic, message = string.split(' ', 1)
-            
+
             if topic.startswith("events.signal."):
                 logger.info(f"Received signal on topic: {topic}")
                 signal_data = json.loads(message)
                 handle_signal_event(signal_data, pub_socket)
-            
+
             # Add other subscriptions here (e.g., to handle fills, UI commands)
             # if topic.startswith("events.fill."):
             #    handle_fill_event(json.loads(message))
@@ -348,7 +348,7 @@ class MockFyersClient:
 def perform_fyers_login() -> Optional[FyersApiClientType]:
     global TRADING_MODE
     TRADING_MODE = os.getenv("TRADING_MODE", "LIVE").upper()
-    
+
     if TRADING_MODE == "PAPER":
         logger.warning("TRADING_MODE=PAPER. Initializing MockFyersClient.")
         return MockFyersClient()
@@ -356,7 +356,7 @@ def perform_fyers_login() -> Optional[FyersApiClientType]:
     if not all([FYERS_APP_ID, FYERS_SECRET_KEY, FYERS_REDIRECT_URI, FYERS_AUTH_CODE]):
         logger.critical("Fyers credentials missing in .env file for LIVE mode.")
         return None
-    
+
     session = fyersModel.SessionModel(
         client_id=FYERS_APP_ID,
         secret_key=FYERS_SECRET_KEY,
@@ -365,13 +365,13 @@ def perform_fyers_login() -> Optional[FyersApiClientType]:
         grant_type="authorization_code"
     )
     session.set_token(FYERS_AUTH_CODE)
-    
+
     try:
         response = session.generate_token()
         if response.get("s") == "ok" and "access_token" in response:
             logger.info("Fyers Access Token generated successfully for Executioner.")
             access_token = response["access_token"]
-            
+
             client = fyersModel.FyersModel(
                 client_id=FYERS_APP_ID,
                 token=access_token,
@@ -390,7 +390,7 @@ async def get_lot_size_for_symbol(symbol: str) -> Optional[int]:
         return SYMBOL_DETAILS_CACHE[symbol]
     if not fyers_api_client:
         return None
-        
+
     if TRADING_MODE == "PAPER":
         lot_size = fyers_api_client.get_lot_size_for_symbol(symbol)
         if lot_size:
@@ -401,7 +401,7 @@ async def get_lot_size_for_symbol(symbol: str) -> Optional[int]:
     try:
         loop = asyncio.get_event_loop()
         quote_response = await loop.run_in_executor(None, fyers_api_client.quotes, {"symbols": symbol})
-        
+
         if quote_response.get("s") == "ok" and quote_response.get("d"):
             lot_size = int(quote_response["d"][0]["v"].get('lot_size', 0))
             if lot_size > 0:
@@ -416,44 +416,44 @@ async def get_lot_size_for_symbol(symbol: str) -> Optional[int]:
 async def check_slice_status(order_id: str, expected_qty: int) -> Tuple[Literal['FILLED', 'FAILED'], int, float]:
     if not fyers_api_client:
         return ('FAILED', 0, 0.0)
-        
+
     for _ in range(ORDER_CHECK_ATTEMPTS):
         try:
             loop = asyncio.get_event_loop()
             orderbook = await loop.run_in_executor(None, fyers_api_client.get_order_book, {"id": order_id})
-            
+
             if orderbook.get("s") == "ok" and orderbook.get("orderBook"):
                 details = orderbook["orderBook"][0]
                 status, filled_qty = details.get("status"), details.get("filledQty", 0)
-                
+
                 if status == 2: # 2 = Filled
                     if filled_qty == expected_qty:
                         return ('FILLED', filled_qty, details.get("tradedPrice", 0.0))
                     else:
                         logger.warning(f"Order {order_id} partially filled? Expected {expected_qty}, Got {filled_qty}. Treating as filled for now.")
                         return ('FILLED', filled_qty, details.get("tradedPrice", 0.0))
-                        
+
                 if status in [5, 6]: # 5 = Rejected, 6 = Cancelled
                     logger.error(f"Order slice {order_id} failed with status: {status}")
                     return ('FAILED', filled_qty, 0.0)
-            
+
             await asyncio.sleep(ORDER_CHECK_DELAY_SEC)
         except Exception as e:
             logger.error(f"Error checking order status for {order_id}: {e}", exc_info=True)
             await asyncio.sleep(ORDER_CHECK_DELAY_SEC)
-            
+
     logger.critical(f"Order {order_id} timed out after {ORDER_CHECK_ATTEMPTS} attempts.")
     return ('FAILED', 0, 0.0)
 
 async def execute_sliced_trade(order: Dict[str, Any], pub_socket: zmq.Socket) -> None:
     if not fyers_api_client:
         return
-        
+
     symbol = order["symbol"]
     total_qty = order["quantity"]
     action = order["action"]
     side = 1 if action == "BUY" else -1
-    
+
     lot_size = await get_lot_size_for_symbol(symbol)
     if not lot_size:
         logger.error(f"Aborting trade: Cannot find lot size for {symbol}.")
@@ -475,19 +475,19 @@ async def execute_sliced_trade(order: Dict[str, Any], pub_socket: zmq.Socket) ->
             "productType": "INTRADAY",
             "validity": "DAY"
         }
-        
+
         try:
             loop = asyncio.get_event_loop()
             order_resp = await loop.run_in_executor(None, fyers_api_client.place_order, order_data)
-            
+
             if not (order_resp.get("s") == "ok" and "id" in order_resp):
                 logger.critical(f"Slice {i+1} placement failed: {order_resp.get('message')}")
                 all_ok = False
                 break
-                
+
             order_id = order_resp["id"]
             status, filled_qty, avg_price = await check_slice_status(order_id, slice_qty)
-            
+
             if status == 'FILLED':
                 total_filled_qty += filled_qty
                 total_value += filled_qty * avg_price
@@ -501,7 +501,7 @@ async def execute_sliced_trade(order: Dict[str, Any], pub_socket: zmq.Socket) ->
                 if filled_qty > 0: # Neutralize partial fill from failed slice
                     total_filled_qty += filled_qty
                 break
-                
+
         except Exception as e:
             logger.critical(f"Exception during slice {i+1} execution: {e}", exc_info=True)
             all_ok = False
@@ -509,7 +509,7 @@ async def execute_sliced_trade(order: Dict[str, Any], pub_socket: zmq.Socket) ->
 
     # --- All-or-Nothing Neutralization Logic ---
     final_avg_price = total_value / total_filled_qty if total_filled_qty > 0 else 0
-    
+
     if all_ok and total_filled_qty == total_qty:
         # SUCCESS
         logger.warning(f"SUCCESS: Trade {action} {total_qty} {symbol} fully executed.")
@@ -522,7 +522,7 @@ async def execute_sliced_trade(order: Dict[str, Any], pub_socket: zmq.Socket) ->
             "fills": fill_events
         }
         pub_socket.send_string(f"events.fill.success {json.dumps(event)}")
-    
+
     else:
         # FAILURE - Neutralize all fills
         logger.critical(f"FAILURE: Trade {action} {total_qty} {symbol} failed. Neutralizing {total_filled_qty} shares.")
@@ -541,7 +541,7 @@ async def execute_sliced_trade(order: Dict[str, Any], pub_socket: zmq.Socket) ->
                 logger.warning(f"Neutralization order placed for {total_filled_qty} {symbol}.")
             except Exception as e:
                 logger.critical(f"!!! CRITICAL: FAILED TO NEUTRALIZE PARTIAL FILL: {e} !!!")
-        
+
         event = {
             "status": "failed",
             "symbol": symbol,
@@ -557,42 +557,42 @@ def main() -> None:
     """Main loop for the Executioner."""
     global fyers_api_client
     fyers_api_client = perform_fyers_login()
-    
+
     if not fyers_api_client:
         logger.critical("Could not log into Fyers. Executioner will not run.")
         return
 
     context = zmq.Context()
-    
+
     # Socket to receive orders
     sub_socket = context.socket(zmq.SUB)
     sub_socket.connect(ZMQ_SUB_URL)
     sub_socket.subscribe("events.order.execute") # Only listens for this one topic
     sub_socket.subscribe("events.command.square_off_all") # Example of UI command
-    
+
     # Socket to publish fills
     pub_socket = context.socket(zmq.PUB)
     pub_socket.connect(ZMQ_PUB_URL)
-    
+
     logger.info(f"Executioner is online. Subscribed to orders on {ZMQ_SUB_URL}. Publishing fills to {ZMQ_PUB_URL}.")
-    
+
     try:
         while True:
             string = sub_socket.recv_string()
             topic, message = string.split(' ', 1)
-            
+
             if topic == "events.order.execute":
                 logger.info(f"Received execution order on topic: {topic}")
                 order_data = json.loads(message)
                 # We use asyncio.run() here because this is a blocking loop
                 # This spawns a new async event loop for each order
                 asyncio.run(execute_sliced_trade(order_data, pub_socket))
-            
+
             # Example of how UI commands would work
             if topic == "events.command.square_off_all":
                 logger.warning("SQUARE OFF ALL command received from UI!")
                 # Add logic here to square off all positions
-                
+
     except KeyboardInterrupt:
         logger.info("Executioner shutting down.")
     finally:
@@ -635,17 +635,17 @@ def zmq_broker():
     SUB socket (where components subscribe).
     """
     context = zmq.Context()
-    
+
     # Frontend: Components SUBMIT messages here
     frontend = context.socket(zmq.XSUB)
     frontend.bind("tcp://*:5555")
-    
+
     # Backend: Components RECEIVE messages from here
     backend = context.socket(zmq.XPUB)
     backend.bind("tcp://*:5556")
-    
+
     logging.info("ZMQ Broker is ONLINE. SUBs on 5555, PUBs on 5556.")
-    
+
     try:
         # This is a blocking call that runs the proxy
         zmq.proxy(frontend, backend)
@@ -658,13 +658,13 @@ def zmq_broker():
 def main():
     logging.basicConfig(level=logging.INFO,
                         format='%(asctime)s - CONDUCTOR - %(levelname)s - %(message)s')
-    
+
     # 1. Start the ZMQ Broker in a separate thread
     zmq_thread = Thread(target=zmq_broker, daemon=True, name="ZMQBrokerThread")
     zmq_thread.start()
-    
+
     logging.info("Starting OpenAlgo Flask Web Server...")
-    
+
     # 2. Run the OpenAlgo Web Application (blocking)
     # You will need to find how OpenAlgo's web app is started
     # It's likely one of these:

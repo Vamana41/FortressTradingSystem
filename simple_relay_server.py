@@ -25,13 +25,13 @@ class SimpleRelayServer:
         self.quote_cache = {}
         self.api_key = os.getenv("OPENALGO_API_KEY", "")
         self.port = int(os.getenv("RELAY_PORT", "8766"))
-        
+
     async def handle_client(self, websocket, path):
         """Handle client connections"""
         self.clients.add(websocket)
         client_id = f"client_{len(self.clients)}"
         logger.info(f"Client {client_id} connected")
-        
+
         try:
             # Send connection acknowledgment
             await websocket.send(json.dumps({
@@ -39,7 +39,7 @@ class SimpleRelayServer:
                 "status": "connected",
                 "server": "OpenAlgo Relay"
             }))
-            
+
             async for message in websocket:
                 try:
                     data = json.loads(message)
@@ -55,32 +55,32 @@ class SimpleRelayServer:
                         "type": "error",
                         "message": str(e)
                     }))
-                    
+
         except websockets.exceptions.ConnectionClosed:
             logger.info(f"Client {client_id} disconnected")
         except Exception as e:
             logger.error(f"Client error: {e}")
         finally:
             self.clients.discard(websocket)
-            
+
     async def process_message(self, websocket, data):
         """Process incoming messages"""
         msg_type = data.get("type", "")
-        
+
         if msg_type == "ping":
             await websocket.send(json.dumps({"type": "pong"}))
-            
+
         elif msg_type == "get_quote":
             symbol = data.get("symbol", "")
             if symbol:
                 await self.send_quote(websocket, symbol)
-                
+
         elif msg_type == "subscribe":
             symbol = data.get("symbol", "")
             if symbol:
                 logger.info(f"Client subscribed to {symbol}")
                 await self.send_quote(websocket, symbol)
-                
+
         elif msg_type == "get_history":
             symbol = data.get("symbol", "")
             await websocket.send(json.dumps({
@@ -89,10 +89,10 @@ class SimpleRelayServer:
                 "data": [],
                 "message": "Historical data not available"
             }))
-            
+
         else:
             logger.warning(f"Unknown message type: {msg_type}")
-            
+
     async def send_quote(self, websocket, symbol):
         """Send quote data to client"""
         # Simulate quote data for testing
@@ -108,13 +108,13 @@ class SimpleRelayServer:
             "oi": 50000,
             "timestamp": int(time.time())
         }
-        
+
         await websocket.send(json.dumps(quote_data))
-        
+
     async def start(self):
         """Start the relay server"""
         logger.info(f"Starting relay server on port {self.port}")
-        
+
         async with websockets.serve(self.handle_client, "localhost", self.port):
             logger.info(f"Relay server listening on ws://localhost:{self.port}")
             await asyncio.Future()  # Run forever

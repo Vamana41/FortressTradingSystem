@@ -1,3 +1,2 @@
 OpenAlgo Database Reset Complete
 ========================================
-

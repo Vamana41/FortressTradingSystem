@@ -356,7 +356,7 @@ frontend fortress_frontend
     bind *:80
     bind *:443 ssl crt /etc/ssl/certs/your-domain.pem
     redirect scheme https if !{ ssl_fc }
-    
+
     default_backend fortress_backend
 
 backend fortress_backend
@@ -634,7 +634,7 @@ groups:
           severity: critical
         annotations:
           summary: "High CPU usage detected"
-          
+
       - alert: RedisDown
         expr: redis_up == 0
         for: 1m
@@ -642,7 +642,7 @@ groups:
           severity: critical
         annotations:
           summary: "Redis server is down"
-          
+
       - alert: HighErrorRate
         expr: error_rate_percent > 5
         for: 5m

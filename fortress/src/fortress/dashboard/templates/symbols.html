@@ -69,7 +69,7 @@ async function loadSymbols() {
     const data = await response.json();
     const symbolsList = document.getElementById('symbolsList');
     symbolsList.innerHTML = '';
-    
+
     data.symbols.forEach(symbol => {
       const item = document.createElement('div');
       item.className = 'list-group-item';
@@ -95,7 +95,7 @@ async function loadActiveContracts() {
     const data = await response.json();
     const contractsList = document.getElementById('activeContracts');
     contractsList.innerHTML = '';
-    
+
     Object.entries(data.active_contracts).forEach(([symbol, contract]) => {
       const item = document.createElement('div');
       item.className = 'list-group-item';
@@ -122,12 +122,12 @@ async function loadExpiringContracts() {
     const data = await response.json();
     const contractsList = document.getElementById('expiringContracts');
     contractsList.innerHTML = '';
-    
+
     if (data.expiring_contracts.length === 0) {
       contractsList.innerHTML = '<div class="text-muted">No contracts expiring within ' + days + ' days</div>';
       return;
     }
-    
+
     data.expiring_contracts.forEach(contract => {
       const item = document.createElement('div');
       item.className = 'list-group-item';
@@ -154,27 +154,27 @@ async function requestRollover() {
     alert('Please enter a symbol');
     return;
   }
-  
+
   try {
     const response = await fetch(`/api/futures/rollover/${symbol}`, {
       method: 'POST'
     });
     const data = await response.json();
-    
+
     const statusDiv = document.getElementById('rolloverStatus');
     statusDiv.className = 'alert alert-success';
     statusDiv.textContent = `Rollover requested successfully. Request ID: ${data.request_id}`;
     statusDiv.classList.remove('d-none');
-    
+
     // Clear input
     document.getElementById('rolloverSymbol').value = '';
-    
+
     // Reload data after a delay
     setTimeout(() => {
       loadActiveContracts();
       loadExpiringContracts();
     }, 2000);
-    
+
   } catch (error) {
     const statusDiv = document.getElementById('rolloverStatus');
     statusDiv.className = 'alert alert-danger';
@@ -191,7 +191,7 @@ document.addEventListener('DOMContentLoaded', function() {
   loadSymbols();
   loadActiveContracts();
   loadExpiringContracts();
-  
+
   // Refresh data every 30 seconds
   setInterval(() => {
     loadActiveContracts();

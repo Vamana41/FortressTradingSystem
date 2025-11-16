@@ -49,7 +49,7 @@ void COpenAlgoConfigDlg::DoDataExchange(CDataExchange* pDX)
 
 	DDX_Text(pDX, IDC_TIMESHIFT_EDIT, g_nTimeShift);
 	DDV_MinMaxInt(pDX, g_nTimeShift, -48, 48);
-	
+
 	DDX_Text(pDX, IDC_WEBSOCKET_EDIT, g_oWebSocketUrl);
 	DDV_MaxChars(pDX, g_oWebSocketUrl, 255);
 }
@@ -328,7 +328,7 @@ BOOL COpenAlgoConfigDlg::TestWebSocketConnection(const CString& wsUrl, const CSt
 {
 	BOOL bSuccess = FALSE;
 	SOCKET sock = INVALID_SOCKET;
-	
+
 	try
 	{
 		// Initialize Winsock
@@ -378,7 +378,7 @@ BOOL COpenAlgoConfigDlg::TestWebSocketConnection(const CString& wsUrl, const CSt
 
 		// For simplicity, we'll just test TCP connection here
 		// Full WebSocket implementation would require HTTP upgrade and WebSocket framing
-		
+
 		// Create socket
 		sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 		if (sock == INVALID_SOCKET)
@@ -448,7 +448,7 @@ BOOL COpenAlgoConfigDlg::TestWebSocketConnection(const CString& wsUrl, const CSt
 		{
 			buffer[received] = '\0';
 			CString response(buffer);
-			
+
 			// Check for successful upgrade
 			if (response.Find(_T("101")) > 0 && response.Find(_T("Switching Protocols")) > 0)
 			{
@@ -463,7 +463,7 @@ BOOL COpenAlgoConfigDlg::TestWebSocketConnection(const CString& wsUrl, const CSt
 					if (authReceived > 0)
 					{
 						CString authResponse = DecodeWebSocketFrame(authBuffer, authReceived);
-						
+
 						// Check for success status in authentication response
 						if (authResponse.Find(_T("success")) >= 0 ||
 							authResponse.Find(_T("authenticated")) >= 0 ||
@@ -573,14 +573,14 @@ BOOL COpenAlgoConfigDlg::SendWebSocketFrame(SOCKET sock, const CString& message)
 	// Convert message to UTF-8
 	CStringA messageA(message);
 	int messageLen = messageA.GetLength();
-	
+
 	// Create WebSocket frame
 	unsigned char frame[1024];
 	int frameLen = 0;
-	
+
 	// First byte: FIN=1, OpCode=1 (text frame)
 	frame[frameLen++] = 0x81;
-	
+
 	// Second byte: MASK=1 + Payload length
 	if (messageLen < 126)
 	{
@@ -596,19 +596,19 @@ BOOL COpenAlgoConfigDlg::SendWebSocketFrame(SOCKET sock, const CString& message)
 	{
 		return FALSE; // Message too long
 	}
-	
+
 	// Generate masking key
 	unsigned char maskKey[4];
 	GenerateMaskKey(maskKey);
 	memcpy(&frame[frameLen], maskKey, 4);
 	frameLen += 4;
-	
+
 	// Masked payload
 	for (int i = 0; i < messageLen; i++)
 	{
 		frame[frameLen++] = messageA[i] ^ maskKey[i % 4];
 	}
-	
+
 	// Send the frame
 	int sent = send(sock, (char*)frame, frameLen, 0);
 	return (sent == frameLen);
@@ -617,19 +617,19 @@ BOOL COpenAlgoConfigDlg::SendWebSocketFrame(SOCKET sock, const CString& message)
 CString COpenAlgoConfigDlg::DecodeWebSocketFrame(const char* buffer, int length)
 {
 	CString result;
-	
+
 	if (length < 2) return result;
-	
+
 	int pos = 0;
 	unsigned char firstByte = (unsigned char)buffer[pos++];
 	unsigned char secondByte = (unsigned char)buffer[pos++];
-	
+
 	// Check if this is a text frame
 	if ((firstByte & 0x0F) != 0x01) return result; // Not a text frame
-	
+
 	BOOL masked = (secondByte & 0x80) != 0;
 	int payloadLen = secondByte & 0x7F;
-	
+
 	// Handle extended payload length
 	if (payloadLen == 126)
 	{
@@ -642,7 +642,7 @@ CString COpenAlgoConfigDlg::DecodeWebSocketFrame(const char* buffer, int length)
 		// 64-bit length not supported
 		return result;
 	}
-	
+
 	// Handle masking key
 	unsigned char maskKey[4] = {0};
 	if (masked)
@@ -651,13 +651,13 @@ CString COpenAlgoConfigDlg::DecodeWebSocketFrame(const char* buffer, int length)
 		memcpy(maskKey, &buffer[pos], 4);
 		pos += 4;
 	}
-	
+
 	// Extract and unmask payload
 	if (pos + payloadLen <= length)
 	{
 		CStringA payloadA;
 		char* payloadBuffer = payloadA.GetBuffer(payloadLen + 1);
-		
+
 		for (int i = 0; i < payloadLen; i++)
 		{
 			if (masked)
@@ -671,10 +671,9 @@ CString COpenAlgoConfigDlg::DecodeWebSocketFrame(const char* buffer, int length)
 		}
 		payloadBuffer[payloadLen] = '\0';
 		payloadA.ReleaseBuffer(payloadLen);
-		
+
 		result = CString(payloadA);
 	}
-	
+
 	return result;
 }
-

@@ -95,7 +95,7 @@ async def lifespan(app: FastAPI):
 
     session = fyersModel.SessionModel(client_id=FYERS_APP_ID, secret_key=FYERS_SECRET_KEY, redirect_uri=FYERS_REDIRECT_URI, response_type="code", grant_type="authorization_code")
     session.set_token(FYERS_AUTH_CODE)
-    
+
     try:
         response = session.generate_token()
         if response.get("s") == "ok":
@@ -173,10 +173,10 @@ async def get_lot_size_for_symbol(symbol: str) -> int:
     logging.warning(f"[Cache MISS] Fetching details for {symbol} from Fyers API...")
     try:
         data = {"symbols": symbol}
-        # The get_symbol_details endpoint is not standard in the library, 
+        # The get_symbol_details endpoint is not standard in the library,
         # but we can use the 'quotes' endpoint which contains the lot size.
         quote_response = fyers_api_client.quotes(data=data)
-        
+
         if quote_response.get("s") == "ok" and quote_response.get("d"):
             symbol_data = quote_response["d"][0].get("v")
             if symbol_data and 'lot_size' in symbol_data:
@@ -185,7 +185,7 @@ async def get_lot_size_for_symbol(symbol: str) -> int:
                 # 3. Store the result in the cache for next time
                 SYMBOL_DETAILS_CACHE[symbol] = lot_size
                 return lot_size
-        
+
         logging.error(f"Could not find lot size for {symbol} in Fyers response: {quote_response}")
         return None # Indicate failure
     except Exception as e:
@@ -210,10 +210,10 @@ async def check_slice_status(order_id: str, expected_qty: int) -> tuple:
     status can be 'FILLED', 'PARTIAL', 'FAILED'
     """
     logging.info(f"[{order_id}] Checking status for slice expecting {expected_qty} qty.")
-    
+
     # Poll for up to 20 seconds for the slice to fill.
     # If a market order doesn't fill quickly, something is very wrong.
-    for _ in range(10): 
+    for _ in range(10):
         try:
             orderbook_response = fyers_api_client.get_order_book(data={"id": order_id})
             if orderbook_response.get("s") == "ok" and orderbook_response.get("orderBook"):
@@ -230,7 +230,7 @@ async def check_slice_status(order_id: str, expected_qty: int) -> tuple:
                         logging.warning(f"[{order_id}] Slice confirmed as PARTIALLY FILLED ({filled_qty}/{expected_qty}).")
                         return ('PARTIAL', filled_qty, avg_price)
                 elif status_code in [5, 6]: # Status 5: 'rejected', 6: 'cancelled'
-                
+
                     logging.error(f"[{order_id}] Slice FAILED: {order_details.get('message')}.")
                     return ('FAILED', 0, 0)
 
@@ -252,7 +252,7 @@ async def execute_sliced_trade(symbol: str, total_qty: int, lot_size: int, actio
     pessimistically locked margin.
     """
     global ACTIVE_POSITIONS, AVAILABLE_MARGIN
-    
+
     if total_qty <= 0: return
 
     side = 1 if action == "BUY" else -1
@@ -272,11 +272,11 @@ async def execute_sliced_trade(symbol: str, total_qty: int, lot_size: int, actio
     total_filled_qty = 0
     total_cost_or_proceeds = 0
     all_slices_successful = True
-    
+
     for i, slice_qty in enumerate(slices):
         logging.warning(f"--> Placing slice {i+1}/{len(slices)}: {action} {slice_qty} {symbol}")
         order_data = {"symbol": symbol, "qty": slice_qty, "type": 2, "side": side, "productType": "INTRADAY", "validity": "DAY"}
-        
+
         order_response = fyers_api_client.place_order(data=order_data)
 
         if not (order_response.get("s") == "ok" and "id" in order_response):
@@ -349,8 +349,8 @@ def get_positions():
 
 @app.post("/trade_signal")
 async def handle_amibroker_signal(request: Request):
-    """ 
-    Receives a signal, dynamically fetches lot size, calculates total size, 
+    """
+    Receives a signal, dynamically fetches lot size, calculates total size,
     pessimistically locks margin, and hands it off to the execution manager.
     """
     async with trade_lock:
@@ -366,7 +366,7 @@ async def handle_amibroker_signal(request: Request):
             symbol = signal.get("symbol")
             action = signal.get("action").upper()
             price = float(signal.get("price"))
-            
+
             # --- DYNAMIC LOT SIZE FETCHING ---
             lot_size = await get_lot_size_for_symbol(symbol)
             if not lot_size or lot_size <= 0:
@@ -378,7 +378,7 @@ async def handle_amibroker_signal(request: Request):
                 if symbol in ACTIVE_POSITIONS:
                     logging.warning(f"[State Check] BUY signal for {symbol}, but already in position. Ignoring.")
                     return {"status": "ignored", "reason": "Already in position"}
-                
+
                 capital_for_trade = AVAILABLE_MARGIN * CAPITAL_ALLOCATION_PERCENT
                 if price <= 0:
                     logging.error(f"[Risk Check] Invalid price received: {price}. Cannot size trade.")
@@ -388,14 +388,14 @@ async def handle_amibroker_signal(request: Request):
                 if max_shares_possible < lot_size:
                     logging.error(f"[Risk Check] Insufficient capital. Cannot afford 1 lot. Need {price * lot_size:.2f}, have {capital_for_trade:.2f}.")
                     return {"status": "error", "reason": "Cannot afford one lot"}
-                
+
                 num_lots = math.floor(max_shares_possible / lot_size)
                 final_qty = num_lots * lot_size
-                
+
                 estimated_cost = final_qty * price
                 AVAILABLE_MARGIN -= estimated_cost
                 logging.warning(f"[Margin Lock] Pessimistically locked {estimated_cost:.2f}. New temporary margin: {AVAILABLE_MARGIN:.2f}")
-                
+
                 asyncio.create_task(execute_sliced_trade(symbol, final_qty, lot_size, "BUY", estimated_cost))
                 return {"status": "submitted", "message": f"Execution for {final_qty} {symbol} started."}
 
@@ -403,7 +403,7 @@ async def handle_amibroker_signal(request: Request):
                 if symbol not in ACTIVE_POSITIONS:
                     logging.warning(f"[State Check] SELL signal for {symbol}, but no position exists. Ignoring.")
                     return {"status": "ignored", "reason": "No position to sell"}
-                
+
                 qty_to_sell = ACTIVE_POSITIONS[symbol]['qty']
                 logging.info(f"[Sizing Logic] Squaring off position. Qty: {qty_to_sell}")
                 asyncio.create_task(execute_sliced_trade(symbol, qty_to_sell, lot_size, "SELL"))

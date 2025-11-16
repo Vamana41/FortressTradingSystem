@@ -12,7 +12,7 @@ from pathlib import Path
 
 def get_api_key_guide():
     """Guide user to get API key from OpenAlgo dashboard"""
-    
+
     print("=" * 80)
     print("OPENALGO API KEY HELPER")
     print("=" * 80)
@@ -32,16 +32,16 @@ def get_api_key_guide():
     print("If you can't find the API key in dashboard, try:")
     print("http://127.0.0.1:5000/apikey")
     print()
-    
+
     api_key = input("Enter your fresh API key: ").strip()
-    
+
     if not api_key:
         print("❌ No API key provided!")
         return None
-    
+
     # Test the API key
     print(f"\nTesting API key: {api_key[:10]}...")
-    
+
     try:
         # Test with ping endpoint using correct API v1 path
         response = requests.post(
@@ -49,22 +49,22 @@ def get_api_key_guide():
             json={'apikey': api_key},
             timeout=10
         )
-        
+
         if response.status_code == 200:
             data = response.json()
             if data.get('status') == 'success':
                 print("✅ API key is VALID!")
-                
+
                 # Save to configuration file
                 config_path = Path("openalgo_symbol_injector.env")
-                
+
                 # Read current config
                 if config_path.exists():
                     with open(config_path, 'r') as f:
                         lines = f.readlines()
                 else:
                     lines = []
-                
+
                 # Update API key line
                 api_key_found = False
                 new_lines = []
@@ -74,18 +74,18 @@ def get_api_key_guide():
                         api_key_found = True
                     else:
                         new_lines.append(line)
-                
+
                 # If API key line not found, add it
                 if not api_key_found:
                     new_lines.append(f'OPENALGO_API_KEY={api_key}\n')
-                
+
                 # Write updated config
                 with open(config_path, 'w') as f:
                     f.writelines(new_lines)
-                
+
                 print(f"✅ API key saved to {config_path}")
                 print("✅ You can now run the automatic symbol injector!")
-                
+
                 return api_key
             else:
                 print(f"❌ API key test failed: {data.get('message', 'Unknown error')}")
@@ -93,7 +93,7 @@ def get_api_key_guide():
         else:
             print(f"❌ API key test failed: HTTP {response.status_code}")
             return None
-            
+
     except requests.exceptions.ConnectionError:
         print("❌ Cannot connect to OpenAlgo. Make sure it's running on http://127.0.0.1:5000")
         return None
@@ -106,7 +106,7 @@ def main():
     print("OpenAlgo API Key Helper")
     print("This will help you get and validate your fresh API key")
     print()
-    
+
     # Check if OpenAlgo is running
     try:
         response = requests.get("http://127.0.0.1:5000", timeout=5)
@@ -119,9 +119,9 @@ def main():
         print("❌ Cannot connect to OpenAlgo. Make sure it's running first.")
         print("Run: cd openalgo && python app.py")
         return
-    
+
     api_key = get_api_key_guide()
-    
+
     if api_key:
         print("\n" + "=" * 80)
         print("SUCCESS! You can now run the automatic symbol injector:")

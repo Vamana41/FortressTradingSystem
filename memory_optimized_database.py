@@ -14,12 +14,12 @@ logger = logging.getLogger(__name__)
 
 class MemoryOptimizedDatabase:
     """Memory-optimized database configuration"""
-    
+
     def __init__(self):
         self.engines = {}
         self.sessions = {}
         self.setup_memory_optimization()
-    
+
     def setup_memory_optimization(self):
         """Setup memory optimization for database connections"""
         # Reduce connection pool size
@@ -28,17 +28,17 @@ class MemoryOptimizedDatabase:
         self.pool_recycle = 1800  # 30 minutes
         self.pool_timeout = 30
         self.statement_cache_size = 50
-        
+
         # Memory optimization settings
         self.enable_pragmas = True
         self.journal_mode = 'WAL'  # Write-Ahead Logging for better concurrency
         self.synchronous = 'NORMAL'  # Balance between safety and performance
         self.temp_store = 'MEMORY'  # Use memory for temp tables
         self.cache_size = -2000  # 2MB cache size (negative means KB)
-        
+
     def create_memory_optimized_engine(self, database_url, engine_key='default'):
         """Create a memory-optimized database engine"""
-        
+
         # SQLite specific optimizations
         if 'sqlite' in database_url:
             engine = create_engine(
@@ -62,7 +62,7 @@ class MemoryOptimizedDatabase:
                 echo=False,  # Disable SQL logging to reduce memory
                 echo_pool=False,  # Disable pool logging
             )
-            
+
             # Apply SQLite pragmas for memory optimization
             if self.enable_pragmas:
                 @event.listens_for(engine, "connect")
@@ -75,7 +75,7 @@ class MemoryOptimizedDatabase:
                     cursor.execute("PRAGMA page_size = 4096")
                     cursor.execute("PRAGMA max_page_count = 10000")
                     cursor.close()
-        
+
         else:
             # PostgreSQL/MySQL optimizations
             engine = create_engine(
@@ -92,19 +92,19 @@ class MemoryOptimizedDatabase:
                     'isolation_level': 'READ_COMMITTED'
                 }
             )
-        
+
         self.engines[engine_key] = engine
         logger.info(f"Created memory-optimized engine: {engine_key}")
         return engine
-    
+
     def create_memory_optimized_session(self, engine_key='default'):
         """Create a memory-optimized session"""
         if engine_key not in self.sessions:
             if engine_key not in self.engines:
                 raise ValueError(f"Engine {engine_key} not found")
-            
+
             engine = self.engines[engine_key]
-            
+
             # Create session with memory optimization
             session_factory = sessionmaker(
                 bind=engine,
@@ -113,22 +113,22 @@ class MemoryOptimizedDatabase:
                 expire_on_commit=True,  # Expire objects after commit
                 enable_baked_queries=False  # Disable baked queries
             )
-            
+
             # Use scoped session for thread safety
             session = scoped_session(session_factory)
             self.sessions[engine_key] = session
-            
+
             logger.info(f"Created memory-optimized session: {engine_key}")
-        
+
         return self.sessions[engine_key]
-    
+
     def optimize_table_memory(self, table_name, engine_key='default'):
         """Optimize memory usage for specific tables"""
         if engine_key not in self.engines:
             return
-        
+
         engine = self.engines[engine_key]
-        
+
         try:
             with engine.connect() as conn:
                 # SQLite VACUUM to reclaim space
@@ -136,20 +136,20 @@ class MemoryOptimizedDatabase:
                     conn.execute(f"VACUUM")
                     conn.execute(f"ANALYZE {table_name}")
                     logger.info(f"Optimized SQLite table: {table_name}")
-                
+
                 # PostgreSQL/VACUUM optimization
                 elif 'postgresql' in str(engine.url):
                     conn.execute(f"VACUUM ANALYZE {table_name}")
                     logger.info(f"Optimized PostgreSQL table: {table_name}")
-                
+
                 # MySQL optimization
                 elif 'mysql' in str(engine.url):
                     conn.execute(f"OPTIMIZE TABLE {table_name}")
                     logger.info(f"Optimized MySQL table: {table_name}")
-        
+
         except Exception as e:
             logger.error(f"Table optimization error for {table_name}: {e}")
-    
+
     def cleanup_connections(self):
         """Cleanup database connections"""
         for key, session in self.sessions.items():
@@ -158,14 +158,14 @@ class MemoryOptimizedDatabase:
                 logger.info(f"Cleaned up session: {key}")
             except Exception as e:
                 logger.error(f"Session cleanup error for {key}: {e}")
-        
+
         for key, engine in self.engines.items():
             try:
                 engine.dispose()
                 logger.info(f"Disposed engine: {key}")
             except Exception as e:
                 logger.error(f"Engine disposal error for {key}: {e}")
-    
+
     def get_memory_stats(self):
         """Get database memory statistics"""
         stats = {}
@@ -182,7 +182,7 @@ class MemoryOptimizedDatabase:
                         }
             except Exception as e:
                 logger.error(f"Memory stats error for {key}: {e}")
-        
+
         return stats
 
 # Global database optimizer instance
@@ -204,7 +204,7 @@ def optimize_database_memory():
         'users', 'api_keys', 'orders', 'positions', 'holdings',
         'trades', 'latency_logs', 'api_logs', 'traffic_logs'
     ]
-    
+
     for table in tables:
         try:
             db_optimizer.optimize_table_memory(table)
@@ -218,14 +218,14 @@ def cleanup_database_connections():
 if __name__ == "__main__":
     # Test memory-optimized database
     import os
-    
+
     # Create test engine
     database_url = os.getenv('DATABASE_URL', 'sqlite:///openalgo.db')
     engine = create_optimized_engine(database_url, 'test')
-    
+
     # Get memory stats
     stats = db_optimizer.get_memory_stats()
     print(f"Database memory stats: {stats}")
-    
+
     # Cleanup
     cleanup_database_connections()

@@ -91,7 +91,7 @@ Check `C:\AmiPyScripts\fyers_logs\openalgo_comprehensive_injector.log`
 ### Static Symbols (Always Available)
 All your original futures and equities are automatically included:
 - 10 MCX commodity futures
-- 2 NSE index futures  
+- 2 NSE index futures
 - 1 NSE equity (SBIN)
 
 ### Dynamic Symbols (Daily ATM Selection)

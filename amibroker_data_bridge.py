@@ -30,11 +30,11 @@ class AmiBrokerDataBridge:
         self.websocket_url = "ws://127.0.0.1:8765"
         self.data_dir = Path("amibroker_data")
         self.data_dir.mkdir(exist_ok=True)
-        
+
         # Data files for AmiBroker
         self.quotes_file = self.data_dir / "realtime_quotes.csv"
         self.historical_file = self.data_dir / "historical_data.csv"
         self.symbols_file = self.data_dir / "symbols.csv"
-        
+
         self.running = True
         self.subscribed_symbols

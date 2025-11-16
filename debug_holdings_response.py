@@ -14,20 +14,20 @@ def debug_holdings():
     url = f"{BASE_URL}/holdings"
     headers = {"Content-Type": "application/json"}
     data = {"apikey": API_KEY}
-    
+
     try:
         print("Testing holdings endpoint...")
         response = requests.post(url, headers=headers, json=data, timeout=10)
-        
+
         print(f"Status Code: {response.status_code}")
         print(f"Response Headers: {dict(response.headers)}")
         print(f"Response Text: {response.text}")
-        
+
         if response.status_code == 200:
             try:
                 result = response.json()
                 print(f"Parsed JSON: {json.dumps(result, indent=2)}")
-                
+
                 # Check the structure
                 if isinstance(result, dict):
                     print(f"Status: {result.get('status')}")
@@ -36,10 +36,10 @@ def debug_holdings():
                     print(f"Data: {result.get('data')}")
                 else:
                     print(f"Result is not a dict: {type(result)}")
-                    
+
             except Exception as e:
                 print(f"JSON parse error: {e}")
-        
+
     except Exception as e:
         print(f"Request error: {e}")
 

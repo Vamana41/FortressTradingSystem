@@ -88,8 +88,8 @@ struct QuoteCache {
 	float volume;
 	float oi;
 	DWORD lastUpdate;
-	
-	QuoteCache() : ltp(0.0f), open(0.0f), high(0.0f), low(0.0f), 
+
+	QuoteCache() : ltp(0.0f), open(0.0f), high(0.0f), low(0.0f),
 	               close(0.0f), volume(0.0f), oi(0.0f), lastUpdate(0) {
 	}
 };
@@ -199,7 +199,7 @@ CString GetExchangeFromTicker(LPCTSTR pszTicker)
 	{
 		return ticker.Mid(dashPos + 1);
 	}
-	
+
 	return _T("NSE");
 }
 
@@ -449,10 +449,10 @@ BOOL TestOpenAlgoConnectionAsync(void)
 	{
 		g_bConnectionInProgress = TRUE;
 		g_dwConnectionStartTime = (DWORD)GetTickCount64();
-		
+
 		unsigned threadID;
 		g_hConnectionThread = (HANDLE)_beginthreadex(NULL, 0, ConnectionThreadProc, NULL, 0, &threadID);
-		
+
 		if (g_hConnectionThread == NULL)
 		{
 			g_bConnectionInProgress = FALSE;
@@ -668,7 +668,7 @@ PLUGINAPI int Init(void)
 		g_bPluginInitialized = TRUE;
 
 		g_QuoteCache.InitHashTable(997);
-		
+
 		InitializeCriticalSection(&g_WebSocketCriticalSection);
 		g_bCriticalSectionInitialized = TRUE;
 	}
@@ -682,7 +682,7 @@ PLUGINAPI int Release(void)
 
 	CleanupWebSocket();
 	g_QuoteCache.RemoveAll();
-	
+
 	if (g_bCriticalSectionInitialized)
 	{
 		DeleteCriticalSection(&g_WebSocketCriticalSection);
@@ -932,10 +932,10 @@ PLUGINAPI struct RecentInfo* GetRecentInfo(LPCTSTR pszTicker)
 	ri.nStructSize = sizeof(struct RecentInfo);
 
 	CString ticker(pszTicker);
-	
+
 	// Initialize WebSocket asynchronously
 	DWORD dwNow = (DWORD)GetTickCount64();
-	if (!g_bWebSocketConnected && !g_bWebSocketConnecting && 
+	if (!g_bWebSocketConnected && !g_bWebSocketConnecting &&
 		(dwNow - g_dwLastConnectionAttempt) > WEBSOCKET_CONNECT_TIMEOUT)
 	{
 		g_dwLastConnectionAttempt = dwNow;
@@ -1013,12 +1013,12 @@ BOOL SendWebSocketFrame(const CString& message)
 
 	CStringA messageA(message);
 	int messageLen = messageA.GetLength();
-	
+
 	unsigned char frame[1024];
 	int frameLen = 0;
-	
+
 	frame[frameLen++] = 0x81;
-	
+
 	if (messageLen < 126)
 	{
 		frame[frameLen++] = 0x80 | messageLen;
@@ -1033,17 +1033,17 @@ BOOL SendWebSocketFrame(const CString& message)
 	{
 		return FALSE;
 	}
-	
+
 	unsigned char maskKey[4];
 	GenerateWebSocketMaskKey(maskKey);
 	memcpy(&frame[frameLen], maskKey, 4);
 	frameLen += 4;
-	
+
 	for (int i = 0; i < messageLen; i++)
 	{
 		frame[frameLen++] = messageA[i] ^ maskKey[i % 4];
 	}
-	
+
 	int sent = send(g_websocket, (char*)frame, frameLen, 0);
 	return (sent == frameLen);
 }
@@ -1051,23 +1051,23 @@ BOOL SendWebSocketFrame(const CString& message)
 CString DecodeWebSocketFrame(const char* buffer, int length)
 {
 	CString result;
-	
+
 	if (length < 2) return result;
-	
+
 	int pos = 0;
 	unsigned char firstByte = (unsigned char)buffer[pos++];
 	unsigned char secondByte = (unsigned char)buffer[pos++];
-	
+
 	unsigned char opcode = firstByte & 0x0F;
-	
+
 	if (opcode == 0x08) return _T("CLOSE_FRAME");
 	else if (opcode == 0x09) return _T("PING_FRAME");
 	else if (opcode == 0x0A) return _T("PONG_FRAME");
 	else if (opcode != 0x01) return result;
-	
+
 	BOOL masked = (secondByte & 0x80) != 0;
 	int payloadLen = secondByte & 0x7F;
-	
+
 	if (payloadLen == 126)
 	{
 		if (pos + 2 > length) return result;
@@ -1078,9 +1078,9 @@ CString DecodeWebSocketFrame(const char* buffer, int length)
 	{
 		return result;
 	}
-	
+
 	if (payloadLen <= 0 || payloadLen > 4096) return result;
-	
+
 	unsigned char maskKey[4] = {0};
 	if (masked)
 	{
@@ -1088,12 +1088,12 @@ CString DecodeWebSocketFrame(const char* buffer, int length)
 		memcpy(maskKey, &buffer[pos], 4);
 		pos += 4;
 	}
-	
+
 	if (pos + payloadLen > length) return result;
-	
+
 	CStringA payloadA;
 	char* payloadBuffer = payloadA.GetBuffer(payloadLen + 1);
-	
+
 	for (int i = 0; i < payloadLen; i++)
 	{
 		if (masked)
@@ -1107,9 +1107,9 @@ CString DecodeWebSocketFrame(const char* buffer, int length)
 	}
 	payloadBuffer[payloadLen] = '\0';
 	payloadA.ReleaseBuffer(payloadLen);
-	
+
 	result = CString(payloadA);
-	
+
 	return result;
 }
 
@@ -1130,7 +1130,7 @@ BOOL InitializeWebSocketAsync(void)
 	{
 		unsigned threadID;
 		g_hWebSocketThread = (HANDLE)_beginthreadex(NULL, 0, WebSocketThreadProc, NULL, 0, &threadID);
-		
+
 		if (g_hWebSocketThread == NULL)
 		{
 			return FALSE;
@@ -1159,11 +1159,11 @@ unsigned __stdcall WebSocketThreadProc(void* pParam)
 
 	// Attempt connection with timeout
 	BOOL bConnected = ConnectWebSocketNonBlocking();
-	
+
 	if (bConnected)
 	{
 		g_bWebSocketConnected = TRUE;
-		
+
 		// Set up periodic ping timer
 		if (g_hAmiBrokerWnd != NULL)
 		{
@@ -1190,7 +1190,7 @@ BOOL ConnectWebSocketNonBlocking(void)
 	// Parse WebSocket URL
 	CString host, path;
 	int port = 80;
-	
+
 	CString url = g_oWebSocketUrl;
 	if (url.Left(5) == _T("wss://"))
 	{
@@ -1201,7 +1201,7 @@ BOOL ConnectWebSocketNonBlocking(void)
 	{
 		url = url.Mid(5);
 	}
-	
+
 	int slashPos = url.Find(_T('/'));
 	if (slashPos > 0)
 	{
@@ -1213,7 +1213,7 @@ BOOL ConnectWebSocketNonBlocking(void)
 		host = url;
 		path = _T("/");
 	}
-	
+
 	int colonPos = host.Find(_T(':'));
 	if (colonPos > 0)
 	{
@@ -1221,34 +1221,34 @@ BOOL ConnectWebSocketNonBlocking(void)
 		port = _ttoi(portStr);
 		host = host.Left(colonPos);
 	}
-	
+
 	// Create socket with timeout
 	g_websocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (g_websocket == INVALID_SOCKET)
 		return FALSE;
-	
+
 	// Set socket to non-blocking mode immediately
 	u_long mode = 1;
 	ioctlsocket(g_websocket, FIONBIO, &mode);
-	
+
 	// Resolve hostname
 	struct addrinfo hints, *result;
 	ZeroMemory(&hints, sizeof(hints));
 	hints.ai_family = AF_INET;
 	hints.ai_socktype = SOCK_STREAM;
 	hints.ai_protocol = IPPROTO_TCP;
-	
+
 	CStringA hostA(host);
 	CStringA portStrA;
 	portStrA.Format("%d", port);
-	
+
 	if (getaddrinfo(hostA, portStrA, &hints, &result) != 0)
 	{
 		closesocket(g_websocket);
 		g_websocket = INVALID_SOCKET;
 		return FALSE;
 	}
-	
+
 	// Connect with timeout using select
 	if (connect(g_websocket, result->ai_addr, (int)result->ai_addrlen) == SOCKET_ERROR)
 	{
@@ -1260,16 +1260,16 @@ BOOL ConnectWebSocketNonBlocking(void)
 			g_websocket = INVALID_SOCKET;
 			return FALSE;
 		}
-		
+
 		// Wait for connection with timeout
 		fd_set writefds;
 		FD_ZERO(&writefds);
 		FD_SET(g_websocket, &writefds);
-		
+
 		struct timeval timeout;
 		timeout.tv_sec = WEBSOCKET_CONNECT_TIMEOUT / 1000;
 		timeout.tv_usec = 0;
-		
+
 		if (select(0, NULL, &writefds, NULL, &timeout) <= 0)
 		{
 			freeaddrinfo(result);
@@ -1278,9 +1278,9 @@ BOOL ConnectWebSocketNonBlocking(void)
 			return FALSE;
 		}
 	}
-	
+
 	freeaddrinfo(result);
-	
+
 	// Send WebSocket upgrade request
 	CString upgradeRequest;
 	upgradeRequest.Format(
@@ -1292,7 +1292,7 @@ BOOL ConnectWebSocketNonBlocking(void)
 		_T("Sec-WebSocket-Version: 13\r\n")
 		_T("\r\n"),
 		(LPCTSTR)path, (LPCTSTR)host, port);
-	
+
 	CStringA requestA(upgradeRequest);
 	if (send(g_websocket, requestA, requestA.GetLength(), 0) == SOCKET_ERROR)
 	{
@@ -1300,26 +1300,26 @@ BOOL ConnectWebSocketNonBlocking(void)
 		g_websocket = INVALID_SOCKET;
 		return FALSE;
 	}
-	
+
 	// Wait for upgrade response with timeout
 	fd_set readfds;
 	FD_ZERO(&readfds);
 	FD_SET(g_websocket, &readfds);
-	
+
 	struct timeval timeout;
 	timeout.tv_sec = WEBSOCKET_CONNECT_TIMEOUT / 1000;
 	timeout.tv_usec = 0;
-	
+
 	if (select(0, &readfds, NULL, NULL, &timeout) > 0)
 	{
 		char buffer[1024];
 		int received = recv(g_websocket, buffer, sizeof(buffer) - 1, 0);
-		
+
 		if (received > 0)
 		{
 			buffer[received] = '\0';
 			CString response(buffer);
-			
+
 			if (response.Find(_T("101")) > 0 && response.Find(_T("Switching Protocols")) > 0)
 			{
 				// Authenticate with timeout
@@ -1327,7 +1327,7 @@ BOOL ConnectWebSocketNonBlocking(void)
 			}
 		}
 	}
-	
+
 	closesocket(g_websocket);
 	g_websocket = INVALID_SOCKET;
 	return FALSE;
@@ -1338,32 +1338,32 @@ BOOL AuthenticateWebSocketNonBlocking(void)
 {
 	if (!g_bWebSocketConnected)
 		return FALSE;
-	
+
 	// Send authentication message
 	CString authMsg = _T("{\"action\":\"authenticate\",\"api_key\":\"") + g_oApiKey + _T("\"}");
-	
+
 	if (SendWebSocketFrame(authMsg))
 	{
 		// Wait for authentication response with timeout
 		fd_set readfds;
 		FD_ZERO(&readfds);
 		FD_SET(g_websocket, &readfds);
-		
+
 		struct timeval timeout;
 		timeout.tv_sec = 5;
 		timeout.tv_usec = 0;
-		
+
 		if (select(0, &readfds, NULL, NULL, &timeout) > 0)
 		{
 			char authBuffer[1024];
 			int received = recv(g_websocket, authBuffer, sizeof(authBuffer) - 1, 0);
-			
+
 			if (received > 0)
 			{
 				authBuffer[received] = '\0';
 				CString authResponse = DecodeWebSocketFrame(authBuffer, received);
-				
-				if (authResponse.Find(_T("success")) >= 0 || 
+
+				if (authResponse.Find(_T("success")) >= 0 ||
 					authResponse.Find(_T("authenticated")) >= 0 ||
 					authResponse.Find(_T("\"status\":\"ok\"")) >= 0 ||
 					authResponse.Find(_T("\"status\":\"success\"")) >= 0)
@@ -1374,13 +1374,13 @@ BOOL AuthenticateWebSocketNonBlocking(void)
 				}
 			}
 		}
-		
+
 		// Fallback: assume success if message sent successfully
 		g_bWebSocketAuthenticated = TRUE;
 		SubscribePendingSymbols();
 		return TRUE;
 	}
-	
+
 	return FALSE;
 }
 
@@ -1388,14 +1388,14 @@ BOOL SubscribeToSymbol(LPCTSTR pszTicker)
 {
 	if (!g_bWebSocketConnected || !g_bWebSocketAuthenticated)
 		return FALSE;
-	
+
 	CString symbol = GetCleanSymbol(pszTicker);
 	CString exchange = GetExchangeFromTicker(pszTicker);
-	
+
 	CString subMsg;
 	subMsg.Format(_T("{\"action\":\"subscribe\",\"symbol\":\"%s\",\"exchange\":\"%s\",\"mode\":2}"),
 		(LPCTSTR)symbol, (LPCTSTR)exchange);
-	
+
 	return SendWebSocketFrame(subMsg);
 }
 
@@ -1403,14 +1403,14 @@ BOOL UnsubscribeFromSymbol(LPCTSTR pszTicker)
 {
 	if (!g_bWebSocketConnected || !g_bWebSocketAuthenticated)
 		return FALSE;
-	
+
 	CString symbol = GetCleanSymbol(pszTicker);
 	CString exchange = GetExchangeFromTicker(pszTicker);
-	
+
 	CString unsubMsg;
 	unsubMsg.Format(_T("{\"action\":\"unsubscribe\",\"symbol\":\"%s\",\"exchange\":\"%s\",\"mode\":2}"),
 		(LPCTSTR)symbol, (LPCTSTR)exchange);
-	
+
 	return SendWebSocketFrame(unsubMsg);
 }
 
@@ -1418,7 +1418,7 @@ void SubscribePendingSymbols(void)
 {
 	if (!g_bWebSocketConnected || !g_bWebSocketAuthenticated)
 		return;
-	
+
 	EnterCriticalSection(&g_WebSocketCriticalSection);
 	// Symbols are subscribed on-demand in GetRecentInfo
 	LeaveCriticalSection(&g_WebSocketCriticalSection);
@@ -1429,7 +1429,7 @@ BOOL ProcessWebSocketData(void)
 {
 	if (!g_bWebSocketConnected || g_websocket == INVALID_SOCKET)
 		return FALSE;
-	
+
 	// Send periodic ping to keep connection alive
 	static DWORD lastPingTime = 0;
 	DWORD currentTime = (DWORD)GetTickCount64();
@@ -1440,25 +1440,25 @@ BOOL ProcessWebSocketData(void)
 		send(g_websocket, (char*)pingFrame, 6, 0);
 		lastPingTime = currentTime;
 	}
-	
+
 	// Check for incoming data (non-blocking)
 	fd_set readfds;
 	FD_ZERO(&readfds);
 	FD_SET(g_websocket, &readfds);
-	
+
 	struct timeval timeout;
 	timeout.tv_sec = 0;
 	timeout.tv_usec = 0;
-	
+
 	if (select(0, &readfds, NULL, NULL, &timeout) > 0)
 	{
 		char buffer[2048];
 		int received = recv(g_websocket, buffer, sizeof(buffer) - 1, 0);
-		
+
 		if (received > 0)
 		{
 			CString data = DecodeWebSocketFrame(buffer, received);
-			
+
 			if (data == _T("PING_FRAME"))
 			{
 				unsigned char pongFrame[6] = {0x8A, 0x84, 0x00, 0x00, 0x00, 0x00};
@@ -1478,13 +1478,13 @@ BOOL ProcessWebSocketData(void)
 			{
 				return TRUE;
 			}
-			
+
 			// Parse market data and update cache
 			if (!data.IsEmpty() && data.Find(_T("market_data")) >= 0)
 			{
 				CString symbol, exchange;
 				float ltp = 0, open = 0, high = 0, low = 0, close = 0, volume = 0, oi = 0;
-				
+
 				int symbolPos = data.Find(_T("\"symbol\":\""));
 				if (symbolPos >= 0)
 				{
@@ -1492,7 +1492,7 @@ BOOL ProcessWebSocketData(void)
 					int endPos = data.Find(_T("\""), symbolPos);
 					symbol = data.Mid(symbolPos, endPos - symbolPos);
 				}
-				
+
 				int exchangePos = data.Find(_T("\"exchange\":\""));
 				if (exchangePos >= 0)
 				{
@@ -1500,7 +1500,7 @@ BOOL ProcessWebSocketData(void)
 					int endPos = data.Find(_T("\""), exchangePos);
 					exchange = data.Mid(exchangePos, endPos - exchangePos);
 				}
-				
+
 				int ltpPos = data.Find(_T("\"ltp\":"));
 				if (ltpPos >= 0)
 				{
@@ -1510,7 +1510,7 @@ BOOL ProcessWebSocketData(void)
 					CString val = data.Mid(ltpPos, endPos - ltpPos);
 					ltp = (float)_tstof(val);
 				}
-				
+
 				if (!symbol.IsEmpty() && !exchange.IsEmpty())
 				{
 					QuoteCache quote;
@@ -1524,11 +1524,11 @@ BOOL ProcessWebSocketData(void)
 					quote.volume = volume;
 					quote.oi = oi;
 					quote.lastUpdate = (DWORD)GetTickCount64();
-					
+
 					CString ticker = symbol + _T("-") + exchange;
 					g_QuoteCache.SetAt(ticker, quote);
 				}
-				
+
 				return TRUE;
 			}
 		}
@@ -1538,7 +1538,7 @@ BOOL ProcessWebSocketData(void)
 			g_bWebSocketAuthenticated = FALSE;
 		}
 	}
-	
+
 	return FALSE;
 }
 
@@ -1547,35 +1547,35 @@ void CleanupWebSocket(void)
 	if (g_bCriticalSectionInitialized)
 	{
 		EnterCriticalSection(&g_WebSocketCriticalSection);
-		
+
 		POSITION pos = g_SubscribedSymbols.GetStartPosition();
 		while (pos != NULL)
 		{
 			CString symbol;
 			BOOL subscribed;
 			g_SubscribedSymbols.GetNextAssoc(pos, symbol, subscribed);
-			
+
 			if (subscribed)
 			{
 				UnsubscribeFromSymbol(symbol);
 			}
 		}
-		
+
 		g_SubscribedSymbols.RemoveAll();
-		
+
 		LeaveCriticalSection(&g_WebSocketCriticalSection);
 	}
-	
+
 	if (g_websocket != INVALID_SOCKET)
 	{
 		closesocket(g_websocket);
 		g_websocket = INVALID_SOCKET;
 	}
-	
+
 	g_bWebSocketConnected = FALSE;
 	g_bWebSocketAuthenticated = FALSE;
 	g_bWebSocketConnecting = FALSE;
 	g_bWebSocketThreadRunning = FALSE;
-	
+
 	WSACleanup();
 }

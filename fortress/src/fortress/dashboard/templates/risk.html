@@ -82,11 +82,11 @@ async function loadRiskData() {
   try {
     const response = await fetch('/api/risk');
     const data = await response.json();
-    
+
     updatePortfolioRisk(data.portfolio_state);
     updatePositionLimits(data.risk_state);
     updateRiskCharts(data);
-    
+
   } catch (error) {
     console.error('Failed to load risk data:', error);
     document.getElementById('portfolioRisk').innerHTML = '<div class="text-danger">Failed to load risk data</div>';
@@ -100,7 +100,7 @@ function updatePortfolioRisk(portfolioState) {
     container.innerHTML = '<div class="text-muted">No portfolio data</div>';
     return;
   }
-  
+
   container.innerHTML = `
     <div class="mb-2">
       <small>Total Value:</small>
@@ -127,7 +127,7 @@ function updatePositionLimits(riskState) {
     container.innerHTML = '<div class="text-muted">No position data</div>';
     return;
   }
-  
+
   container.innerHTML = `
     <div class="mb-2">
       <small>Max Positions:</small>
@@ -164,7 +164,7 @@ function updateRiskCharts(data) {
     if (riskHeatmapChart) {
       riskHeatmapChart.destroy();
     }
-    
+
     riskHeatmapChart = new Chart(heatmapCtx, {
       type: 'bar',
       data: {
@@ -197,14 +197,14 @@ function updateRiskCharts(data) {
       }
     });
   }
-  
+
   // Update risk distribution
   const distributionCtx = document.getElementById('riskDistribution');
   if (distributionCtx && data.risk_state) {
     if (riskDistributionChart) {
       riskDistributionChart.destroy();
     }
-    
+
     riskDistributionChart = new Chart(distributionCtx, {
       type: 'doughnut',
       data: {

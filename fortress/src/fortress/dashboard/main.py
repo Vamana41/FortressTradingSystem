@@ -31,9 +31,9 @@ async def run_dashboard(host: str = "0.0.0.0", port: int = 8000, reload: bool = 
     """Run the dashboard application."""
     try:
         logger.info(f"Starting Fortress Dashboard on {host}:{port}")
-        
+
         import uvicorn
-        
+
         config = uvicorn.Config(
             app="fortress.dashboard.app:app",
             host=host,
@@ -41,10 +41,10 @@ async def run_dashboard(host: str = "0.0.0.0", port: int = 8000, reload: bool = 
             reload=reload,
             log_level="info"
         )
-        
+
         server = uvicorn.Server(config)
         await server.serve()
-        
+
     except Exception as e:
         logger.error(f"Failed to start dashboard", error=str(e))
         raise
@@ -57,19 +57,19 @@ def main():
     parser.add_argument("--port", type=int, default=8000, help="Port to bind to")
     parser.add_argument("--reload", action="store_true", help="Enable auto-reload")
     parser.add_argument("--log-level", default="INFO", help="Log level")
-    
+
     args = parser.parse_args()
-    
+
     # Configure logging
     configure_structlog(log_level=args.log_level, json_format=False)
-    
+
     logger.info("Fortress Trading System Dashboard starting")
     logger.info(f"Configuration: host={args.host}, port={args.port}, reload={args.reload}")
-    
+
     try:
         # Run the dashboard
         asyncio.run(run_dashboard(args.host, args.port, args.reload))
-        
+
     except KeyboardInterrupt:
         logger.info("Dashboard stopped by user")
     except Exception as e:

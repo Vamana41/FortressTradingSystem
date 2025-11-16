@@ -16,25 +16,25 @@ from argon2.exceptions import VerifyMismatchError
 
 def check_api_key_validation():
     """Check API key validation process."""
-    
+
     # Get all API keys from database
     api_keys = ApiKeys.query.all()
-    
+
     print(f"Found {len(api_keys)} API key(s) in database:")
-    
+
     for i, api_key_obj in enumerate(api_keys):
         print(f"\nAPI Key {i+1}:")
         print(f"  User ID: {api_key_obj.user_id}")
         print(f"  Created: {api_key_obj.created_at}")
         print(f"  Has Hash: {'Yes' if api_key_obj.api_key_hash else 'No'}")
         print(f"  Has Encrypted: {'Yes' if api_key_obj.api_key_encrypted else 'No'}")
-        
+
         # Test with user-provided key
         test_key = "89cd257b0bee93f6798130ca99d487a7641a994b567c7646a96775d6c1d425f0"
-        
+
         # Create peppered version
         peppered_test_key = test_key + PEPPER
-        
+
         try:
             # Try to verify against this key's hash
             ph = PasswordHasher()
@@ -48,29 +48,29 @@ def check_api_key_validation():
 def test_key_verification():
     """Test the verification process with the user-provided key."""
     test_key = "89cd257b0bee93f6798130ca99d487a7641a994b567c7646a96775d6c1d425f0"
-    
+
     print(f"\n{'='*60}")
     print("Testing API key verification:")
     print(f"Test key: {test_key[:20]}...")
-    
+
     # Test verification
     user_id = verify_api_key(test_key)
-    
+
     if user_id:
         print(f"✅ API key is valid! User ID: {user_id}")
     else:
         print(f"❌ API key is invalid!")
-        
+
         # Let's check what went wrong
         print(f"\nDebugging verification process:")
         print(f"PEPPER used: {PEPPER}")
-        
+
         # Get all keys and show their hashes
         api_keys = ApiKeys.query.all()
         for api_key_obj in api_keys:
             print(f"\nStored key for user {api_key_obj.user_id}:")
             print(f"  Hash: {api_key_obj.api_key_hash[:50]}...")
-            
+
             # Create our own hash for comparison
             ph = PasswordHasher()
             try:
@@ -84,7 +84,7 @@ def main():
     """Main function."""
     print("🔍 OpenAlgo API Key Validation Debug")
     print("=" * 60)
-    
+
     check_api_key_validation()
     test_key_verification()
 

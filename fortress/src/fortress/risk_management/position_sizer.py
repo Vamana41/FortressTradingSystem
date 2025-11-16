@@ -46,11 +46,11 @@ class PositionSizingResult:
 
 class PositionSizer:
     """Position sizing service with multiple sizing algorithms."""
-    
+
     def __init__(self, default_method: SizingMethod = SizingMethod.PERCENT_OF_EQUITY):
         self.default_method = default_method
         logger.info("PositionSizer initialized", default_method=default_method)
-    
+
     async def calculate_position_size(
         self,
         symbol: str,
@@ -65,7 +65,7 @@ class PositionSizer:
         market_data: Optional[Dict[str, Any]] = None,
     ) -> PositionSizingResult:
         """Calculate optimal position size based on risk parameters."""
-        
+
         logger.info(
             "Calculating position size",
             symbol=symbol,
@@ -77,7 +77,7 @@ class PositionSizer:
             total_equity=total_equity,
             strategy_config=strategy_config
         )
-        
+
         # Validate basic parameters
         if price <= 0:
             return PositionSizingResult(
@@ -93,7 +93,7 @@ class PositionSizer:
                 success=False,
                 error_message="Invalid price for sizing"
             )
-        
+
         if lot_size <= 0:
             return PositionSizingResult(
                 final_quantity=0,
@@ -108,12 +108,12 @@ class PositionSizer:
                 success=False,
                 error_message="Invalid lot size"
             )
-        
+
         # Get sizing method from strategy config or use default
         sizing_method = strategy_config.get("sizing_method", self.default_method)
         risk_per_trade = strategy_config.get("risk_per_trade", 0.02)  # 2% default
         max_position_size = strategy_config.get("max_position_size", 0.1)  # 10% of equity
-        
+
         # Calculate based on sizing method
         if sizing_method == SizingMethod.PERCENT_OF_EQUITY:
             result = await self._size_by_percent_of_equity(
@@ -141,7 +141,7 @@ class PositionSizer:
                 symbol, price, lot_size, available_margin, total_equity,
                 risk_per_trade, max_position_size
             )
-        
+
         # Ensure minimum one lot affordability
         if result.success and result.final_quantity < lot_size:
             min_cost = lot_size * price
@@ -158,33 +158,33 @@ class PositionSizer:
                 result.error_message = "Cannot afford one lot"
                 result.sizing_rationale = "Insufficient margin for minimum lot size"
                 logger.error("Cannot afford minimum lot size", min_cost=min_cost, available_margin=available_margin)
-        
+
         return result
-    
+
     async def _size_by_percent_of_equity(
         self, symbol: str, price: float, lot_size: int, available_margin: float,
         total_equity: float, risk_per_trade: float, max_position_size: float
     ) -> PositionSizingResult:
         """Size position as percentage of equity with risk management."""
-        
+
         # Calculate risk amount
         risk_amount = total_equity * risk_per_trade
         max_position_value = total_equity * max_position_size
-        
+
         # Calculate maximum shares based on risk
         risk_based_shares = risk_amount / price if price > 0 else 0
-        
+
         # Calculate maximum shares based on position size limit
         size_based_shares = max_position_value / price if price > 0 else 0
-        
+
         # Take the smaller of the two
         max_shares = min(risk_based_shares, size_based_shares)
-        
+
         # Calculate number of lots
         num_lots = math.floor(max_shares / lot_size) if lot_size > 0 else 0
         final_quantity = num_lots * lot_size
         estimated_cost = final_quantity * price
-        
+
         # Check available margin
         if estimated_cost > available_margin:
             # Recalculate based on available margin
@@ -192,9 +192,9 @@ class PositionSizer:
             num_lots = math.floor(max_shares_from_margin / lot_size) if lot_size > 0 else 0
             final_quantity = num_lots * lot_size
             estimated_cost = final_quantity * price
-        
+
         risk_percentage = (estimated_cost / total_equity) * 100 if total_equity > 0 else 0
-        
+
         return PositionSizingResult(
             final_quantity=final_quantity,
             estimated_cost=estimated_cost,
@@ -207,26 +207,26 @@ class PositionSizer:
             available_margin_used=estimated_cost,
             success=final_quantity > 0
         )
-    
+
     async def _size_by_fixed_cash(
         self, symbol: str, price: float, lot_size: int, available_margin: float,
         total_equity: float, fixed_cash: float
     ) -> PositionSizingResult:
         """Size position based on fixed cash amount per trade."""
-        
+
         # Ensure we don't risk more than available
         cash_to_risk = min(fixed_cash, available_margin)
-        
+
         # Calculate maximum shares
         max_shares = cash_to_risk / price if price > 0 else 0
-        
+
         # Calculate number of lots
         num_lots = math.floor(max_shares / lot_size) if lot_size > 0 else 0
         final_quantity = num_lots * lot_size
         estimated_cost = final_quantity * price
-        
+
         risk_percentage = (estimated_cost / total_equity) * 100 if total_equity > 0 else 0
-        
+
         return PositionSizingResult(
             final_quantity=final_quantity,
             estimated_cost=estimated_cost,
@@ -239,32 +239,32 @@ class PositionSizer:
             available_margin_used=estimated_cost,
             success=final_quantity > 0
         )
-    
+
     async def _size_by_volatility(
         self, symbol: str, price: float, lot_size: int, available_margin: float,
         total_equity: float, risk_per_trade: float, market_data: Optional[Dict[str, Any]]
     ) -> PositionSizingResult:
         """Size position based on volatility (simplified implementation)."""
-        
+
         # For now, fall back to percent of equity
         # In a full implementation, this would use ATR or historical volatility
         logger.warning("Volatility sizing not fully implemented, falling back to percent of equity")
-        
+
         return await self._size_by_percent_of_equity(
             symbol, price, lot_size, available_margin, total_equity,
             risk_per_trade, 0.1  # 10% max position
         )
-    
+
     async def _size_by_atr(
         self, symbol: str, price: float, lot_size: int, available_margin: float,
         total_equity: float, risk_per_trade: float, market_data: Optional[Dict[str, Any]]
     ) -> PositionSizingResult:
         """Size position based on Average True Range (simplified implementation)."""
-        
+
         # For now, fall back to percent of equity
         # In a full implementation, this would use ATR for stop loss distance
         logger.warning("ATR sizing not fully implemented, falling back to percent of equity")
-        
+
         return await self._size_by_percent_of_equity(
             symbol, price, lot_size, available_margin, total_equity,
             risk_per_trade, 0.1  # 10% max position

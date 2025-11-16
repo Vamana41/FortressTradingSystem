@@ -10,17 +10,17 @@ from fortress.utils.api_key_manager import SecureAPIKeyManager
 def main():
     """Verify API key storage and test connection."""
     manager = SecureAPIKeyManager()
-    
+
     # Get the stored API key
     api_key = manager.get_api_key('openalgo')
-    
+
     if api_key:
         print(f"✅ API key found: {api_key[:10]}...")
-        
+
         # Test connection
         print("Testing connection to OpenAlgo...")
         is_valid = manager.validate_api_key('openalgo')
-        
+
         if is_valid:
             print("✅ API key is valid and OpenAlgo connection successful!")
             return 0

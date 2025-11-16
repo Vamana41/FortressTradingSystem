@@ -176,23 +176,23 @@ async function loadPerformanceData() {
     const currentResponse = await fetch('/api/performance/current');
     const currentData = await currentResponse.json();
     updateCurrentMetrics(currentData);
-    
+
     // Load performance history
     const historyResponse = await fetch('/api/performance/history?hours=6');
     const historyData = await historyResponse.json();
     performanceHistory = historyData.history || [];
     updateCharts();
-    
+
     // Load benchmark results
     const benchmarkResponse = await fetch('/api/performance/benchmarks?limit=10');
     const benchmarkData = await benchmarkResponse.json();
     updateBenchmarkResults(benchmarkData.benchmarks);
-    
+
     // Load recommendations
     const summaryResponse = await fetch('/api/performance/summary');
     const summaryData = await summaryResponse.json();
     updateRecommendations(summaryData.recommendations);
-    
+
   } catch (error) {
     console.error('Failed to load performance data:', error);
     showAlert('Failed to load performance data', 'danger');
@@ -201,42 +201,42 @@ async function loadPerformanceData() {
 
 function updateCurrentMetrics(data) {
   if (!data.system || !data.trading) return;
-  
+
   // System metrics
   const cpuPercent = data.system.cpu_percent || 0;
   const memoryPercent = data.system.memory_percent || 0;
   const diskPercent = data.system.disk_percent || 0;
-  
+
   document.getElementById('cpu-percent').textContent = `${cpuPercent.toFixed(1)}%`;
   document.getElementById('memory-percent').textContent = `${memoryPercent.toFixed(1)}%`;
   document.getElementById('disk-percent').textContent = `${diskPercent.toFixed(1)}%`;
-  
+
   document.getElementById('cpu-progress').style.width = `${cpuPercent}%`;
   document.getElementById('memory-progress').style.width = `${memoryPercent}%`;
   document.getElementById('disk-progress').style.width = `${diskPercent}%`;
-  
+
   // Update progress bar colors based on thresholds
   updateProgressBarColor('cpu-progress', cpuPercent, 80, 90);
   updateProgressBarColor('memory-progress', memoryPercent, 85, 95);
   updateProgressBarColor('disk-progress', diskPercent, 90, 95);
-  
+
   // Trading metrics
   document.getElementById('signals-per-sec').textContent = (data.trading.signals_per_second || 0).toFixed(2);
   document.getElementById('orders-per-sec').textContent = (data.trading.orders_per_second || 0).toFixed(2);
   document.getElementById('avg-latency').textContent = `${(data.trading.latency_ms || 0).toFixed(1)}ms`;
   document.getElementById('error-rate').textContent = `${(data.trading.error_rate || 0).toFixed(1)}%`;
   document.getElementById('success-rate').textContent = `${(data.trading.success_rate || 100).toFixed(1)}%`;
-  
+
   // System info
   const uptime = data.uptime_seconds || 0;
   const hours = Math.floor(uptime / 3600);
   const minutes = Math.floor((uptime % 3600) / 60);
   document.getElementById('uptime').textContent = `${hours}h ${minutes}m`;
-  
+
   document.getElementById('process-count').textContent = data.system.process_count || 0;
   document.getElementById('thread-count').textContent = data.system.thread_count || 0;
   document.getElementById('open-files').textContent = data.system.open_files || 0;
-  
+
   const networkMB = ((data.system.network_sent_mb || 0) + (data.system.network_recv_mb || 0)).toFixed(1);
   document.getElementById('network-io').textContent = `${networkMB}MB`;
 }
@@ -244,7 +244,7 @@ function updateCurrentMetrics(data) {
 function updateProgressBarColor(elementId, value, warningThreshold, dangerThreshold) {
   const element = document.getElementById(elementId);
   if (!element) return;
-  
+
   element.className = 'progress-bar';
   if (value >= dangerThreshold) {
     element.classList.add('bg-danger');
@@ -262,11 +262,11 @@ function updateCharts() {
     if (systemChart) {
       systemChart.destroy();
     }
-    
+
     const labels = performanceHistory.map(h => new Date(h.timestamp).toLocaleTimeString());
     const cpuData = performanceHistory.map(h => h.cpu_percent);
     const memoryData = performanceHistory.map(h => h.memory_percent);
-    
+
     systemChart = new Chart(systemCtx, {
       type: 'line',
       data: {
@@ -305,14 +305,14 @@ function updateCharts() {
       }
     });
   }
-  
+
   // Update trading chart (placeholder - would need trading history data)
   const tradingCtx = document.getElementById('tradingChart');
   if (tradingCtx) {
     if (tradingChart) {
       tradingChart.destroy();
     }
-    
+
     // Sample data for demonstration
     tradingChart = new Chart(tradingCtx, {
       type: 'bar',
@@ -350,11 +350,11 @@ function updateBenchmarkResults(benchmarks) {
     container.innerHTML = '<div class="text-muted">No benchmarks available</div>';
     return;
   }
-  
+
   let html = '<div class="table-responsive"><table class="table table-dark table-sm">';
   html += '<thead><tr><th>Name</th><th>Ops/sec</th><th>Avg Latency</th><th>Duration</th><th>Memory Peak</th></tr></thead>';
   html += '<tbody>';
-  
+
   benchmarks.forEach(benchmark => {
     html += `
       <tr>
@@ -366,7 +366,7 @@ function updateBenchmarkResults(benchmarks) {
       </tr>
     `;
   });
-  
+
   html += '</tbody></table></div>';
   container.innerHTML = html;
 }
@@ -377,7 +377,7 @@ function updateRecommendations(recommendations) {
     container.innerHTML = '<div class="text-success">System performance is optimal</div>';
     return;
   }
-  
+
   let html = '<div class="list-group">';
   recommendations.forEach(rec => {
     html += `
@@ -402,7 +402,7 @@ async function refreshMetrics() {
 async function runBenchmark() {
   const name = prompt('Enter benchmark name:', 'performance_test');
   if (!name) return;
-  
+
   try {
     showAlert('Running benchmark...', 'info');
     const response = await fetch(`/api/performance/benchmark/${name}?iterations=100`, {
@@ -436,7 +436,7 @@ function exportPerformance() {
     tradingHistory: tradingHistory,
     currentMetrics: getCurrentMetricsFromUI()
   };
-  
+
   const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -468,9 +468,9 @@ function showAlert(message, type) {
     ${message}
     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
   `;
-  
+
   document.body.insertBefore(alertDiv, document.body.firstChild);
-  
+
   setTimeout(() => {
     if (alertDiv.parentNode) {
       alertDiv.parentNode.removeChild(alertDiv);

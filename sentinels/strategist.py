@@ -52,7 +52,7 @@ def get_instrument_data(symbol: str) -> Optional[Dict[str, Any]]:
         response = requests.get(CONDUCTOR_INSTRUMENTS_API, params=params, timeout=5)
         response.raise_for_status() # Raise error for 4xx/5xx
         data = response.json()
-        
+
         if data.get("success") and data.get("data"):
             # Assuming data is a list of instruments
             for inst in data["data"]:
@@ -72,11 +72,11 @@ def get_margin_requirements(order: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         response = requests.post(CONDUCTOR_MARGIN_API, json=payload, timeout=10)
         response.raise_for_status()
         data = response.json()
-        
+
         if data.get("success") and data.get("data"):
             logger.info(f"Margin data received: {data['data']}")
             return data['data']
-        
+
         logger.error(f"Margin API call failed: {data.get('error')}")
         return None
     except Exception as e:
@@ -85,17 +85,17 @@ def get_margin_requirements(order: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
 def handle_signal_event(signal: Dict[str, Any], pub_socket: zmq.Socket) -> None:
     """The core logic: receive signal, check margin, publish order."""
-    
+
     symbol = signal.get("symbol")
     action = signal.get("action")
     price = signal.get("price")
-    
+
     if not all([symbol, action, price]):
         logger.warning(f"Malformed signal received and ignored: {signal}")
         return
 
     logger.info(f"Strategist processing signal: {action} {symbol} @ {price}")
-    
+
     # --- Get Lot Size (from new Instruments API) ---
     inst_data = get_instrument_data(symbol)
     if not inst_data or "lot_size" not in inst_data:
@@ -110,7 +110,7 @@ def handle_signal_event(signal: Dict[str, Any], pub_socket: zmq.Socket) -> None:
         "quantity": lot_size, # Calculate margin for a single lot
         "product": "MIS"
     }
-    
+
     margin_data = get_margin_requirements(proposed_order)
     if not margin_data:
         return
@@ -118,18 +118,18 @@ def handle_signal_event(signal: Dict[str, Any], pub_socket: zmq.Socket) -> None:
     # --- Intelligent Sizing ---
     available_margin = margin_data.get("available_margin", 0.0)
     required_per_lot = margin_data.get("required_margin", 0.0)
-    
+
     if required_per_lot <= 0:
         logger.error(f"Margin API returned invalid required_margin: {required_per_lot}")
         return
-        
+
     available_for_trade = available_margin * CAPITAL_ALLOCATION_PERCENT
     max_lots = math.floor(available_for_trade / required_per_lot)
-    
+
     if max_lots == 0:
         logger.warning(f"Margin Inquisition Failed: Insufficient funds for {symbol}. Available: {available_margin}, Required: {required_per_lot}")
         return
-        
+
     final_quantity = max_lots * lot_size
     logger.info(f"Margin Inquisition Passed: Max lots: {max_lots}, Final Qty: {final_quantity}")
 
@@ -141,7 +141,7 @@ def handle_signal_event(signal: Dict[str, Any], pub_socket: zmq.Socket) -> None:
         "order_type": "MARKET",
         "source": "StrategistV3.0"
     }
-    
+
     topic = "request.execute_order" # This is a request for the Conductor
     pub_socket.send_string(f"{topic} {json.dumps(order_event)}")
     logger.warning(f"PUBLISHED Execution Request: {topic} {order_event}")
@@ -150,14 +150,14 @@ def handle_signal_event(signal: Dict[str, Any], pub_socket: zmq.Socket) -> None:
 def main() -> None:
     """Main loop for the Strategist."""
     context = zmq.Context()
-    
+
     sub_socket = context.socket(zmq.SUB)
     sub_socket.connect(ZMQ_SUB_URL)
     sub_socket.subscribe("events.signal.amibroker")
-    
+
     pub_socket = context.socket(zmq.PUB)
     pub_socket.connect(ZMQ_PUB_URL)
-    
+
     logger.info(f"Strategist is online. Subscribed to signals on {ZMQ_SUB_URL}. Publishing requests to {ZMQ_PUB_URL}.")
     logger.info(f"Conductor API endpoint set to: {CONDUCTOR_BASE_URL}")
 
@@ -165,7 +165,7 @@ def main() -> None:
         while True:
             string = sub_socket.recv_string()
             topic, message = string.split(' ', 1)
-            
+
             if topic == "events.signal.amibroker":
                 logger.info(f"Received signal on topic: {topic}")
                 signal_data = json.loads(message)

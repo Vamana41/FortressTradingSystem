@@ -16,7 +16,7 @@ from .scanner_config import ScannerConfig, ScannerResult, PREBUILT_SCANNERS
 
 __all__ = [
     "ScannerEngine",
-    "ScanJob", 
+    "ScanJob",
     "ScanStatus",
     "ChartInkStyleParser",
     "ScannerRule",

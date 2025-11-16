@@ -106,4 +106,3 @@
 * Run the validation matrix; capture outputs and metrics.
 
 * Present results with recommended dependency pins or worker swaps and proceed to integrate RTD `info` messages in the client.
-

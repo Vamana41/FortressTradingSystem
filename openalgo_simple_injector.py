@@ -31,11 +31,11 @@ ALL_SYMBOLS = [
     {"symbol": "TCS", "exchange": "NSE"},
     {"symbol": "INFY", "exchange": "NSE"},
     {"symbol": "ITC", "exchange": "NSE"},
-    
+
     # Nifty and BankNifty for ATM options
     {"symbol": "NIFTY", "exchange": "NSE"},
     {"symbol": "BANKNIFTY", "exchange": "NSE"},
-    
+
     # MCX Commodities
     {"symbol": "CRUDEOIL", "exchange": "MCX"},
     {"symbol": "GOLD", "exchange": "MCX"},
@@ -49,7 +49,7 @@ class OpenAlgoSimpleInjector:
         self.websocket = None
         self.connected = False
         self.authenticated = False
-        
+
     async def connect_and_subscribe(self):
         """Connect to OpenAlgo and subscribe to symbols"""
         try:
@@ -57,7 +57,7 @@ class OpenAlgoSimpleInjector:
             self.websocket = await websockets.connect(WEBSOCKET_URL)
             self.connected = True
             logger.info("✅ Connected to OpenAlgo WebSocket")
-            
+
             # Send authentication
             auth_msg = {
                 "action": "authenticate",
@@ -65,16 +65,16 @@ class OpenAlgoSimpleInjector:
             }
             await self.websocket.send(json.dumps(auth_msg))
             logger.info("Sent authentication")
-            
+
             # Send subscription for all symbols
             subscribe_msg = {
-                "action": "subscribe", 
+                "action": "subscribe",
                 "symbols": ALL_SYMBOLS,
                 "mode": "Quote"
             }
             await self.websocket.send(json.dumps(subscribe_msg))
             logger.info(f"📊 Subscribed to {len(ALL_SYMBOLS)} symbols")
-            
+
             # Log the symbols that should now be available
             logger.info("=" * 60)
             logger.info("🎯 SYMBOLS NOW SUBSCRIBED TO OPENALGO:")
@@ -85,13 +85,13 @@ class OpenAlgoSimpleInjector:
             logger.info("=" * 60)
             logger.info("💡 These symbols should now appear in AmiBroker automatically")
             logger.info("💡 OpenAlgo will forward the market data to AmiBroker via its plugin")
-            
+
             return True
-            
+
         except Exception as e:
             logger.error(f"Failed to connect: {e}")
             return False
-    
+
     async def listen_for_data(self):
         """Listen for incoming market data from OpenAlgo"""
         try:
@@ -100,7 +100,7 @@ class OpenAlgoSimpleInjector:
                     # Wait for data from OpenAlgo (with timeout)
                     message = await asyncio.wait_for(self.websocket.recv(), timeout=30.0)
                     data = json.loads(message)
-                    
+
                     # Log incoming data
                     if "data" in data and isinstance(data["data"], dict):
                         symbol = data["data"].get("symbol", "Unknown")
@@ -110,7 +110,7 @@ class OpenAlgoSimpleInjector:
                         logger.info(f"📈 Received: {ami_format} LTP: {ltp}")
                     else:
                         logger.debug(f"Received message: {data}")
-                        
+
                 except asyncio.TimeoutError:
                     # No data received, but connection is still alive
                     logger.debug("No data received in 30 seconds, connection still active")
@@ -118,14 +118,14 @@ class OpenAlgoSimpleInjector:
                 except json.JSONDecodeError as e:
                     logger.warning(f"Invalid JSON received: {e}")
                     continue
-                    
+
         except websockets.exceptions.ConnectionClosed:
             logger.warning("WebSocket connection closed")
             self.connected = False
         except Exception as e:
             logger.error(f"Error in listen loop: {e}")
             self.connected = False
-    
+
     async def run(self):
         """Main run method"""
         logger.info("=" * 70)
@@ -134,17 +134,17 @@ class OpenAlgoSimpleInjector:
         logger.info("This injector subscribes to symbols via OpenAlgo WebSocket")
         logger.info("OpenAlgo will automatically forward data to AmiBroker")
         logger.info("=" * 70)
-        
+
         # Connect and subscribe
         if await self.connect_and_subscribe():
             logger.info("✅ Successfully subscribed to all symbols!")
             logger.info("🔄 Now listening for market data...")
-            
+
             # Keep listening for data
             await self.listen_for_data()
         else:
             logger.error("❌ Failed to connect and subscribe")
-        
+
         # Cleanup
         if self.websocket:
             await self.websocket.close()

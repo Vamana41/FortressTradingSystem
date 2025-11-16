@@ -56,13 +56,13 @@ Fortress Trading System is a comprehensive, event-driven trading platform design
    ```bash
    # Start Redis
    redis-server
-   
+
    # Start OpenAlgo (in separate terminal)
    python openalgo/app.py
-   
+
    # Start Fortress Trading System
    python fortress/src/fortress/main.py
-   
+
    # Start Dashboard (optional, separate terminal)
    python -m fortress.dashboard.main
    ```

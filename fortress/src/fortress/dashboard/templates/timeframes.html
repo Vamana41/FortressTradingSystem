@@ -98,26 +98,26 @@ let timeframePerformanceChart, signalStrengthChart, historicalSignalsChart;
 async function loadTimeframeAnalysis() {
   const symbol = document.getElementById('symbolSelect').value;
   const strategy = document.getElementById('strategySelect').value;
-  
+
   if (!symbol || !strategy) {
     alert('Please select both symbol and strategy');
     return;
   }
-  
+
   try {
     // Load correlation analysis
     const correlationResponse = await fetch(`/api/timeframes/${symbol}/${strategy}`);
     const correlationData = await correlationResponse.json();
     updateCorrelationAnalysis(correlationData);
-    
+
     // Load recent signals
     const signalsResponse = await fetch(`/api/signals?symbol=${symbol}&strategy=${strategy}&limit=50`);
     const signalsData = await signalsResponse.json();
     updateTimeframeSignals(signalsData.signals);
-    
+
     // Update charts
     updatePerformanceCharts(signalsData.signals, correlationData);
-    
+
   } catch (error) {
     console.error('Failed to load timeframe analysis:', error);
     document.getElementById('correlationResult').innerHTML = '<div class="text-danger">Failed to load analysis</div>';
@@ -130,16 +130,16 @@ function updateCorrelationAnalysis(data) {
     container.innerHTML = `<div class="text-danger">${data.error}</div>`;
     return;
   }
-  
+
   if (!data.correlation_type) {
     container.innerHTML = '<div class="text-muted">No correlation data available</div>';
     return;
   }
-  
+
   const correlationText = data.correlation_type.replace('_', ' ').toUpperCase();
-  const correlationColor = data.correlation_score > 0.7 ? 'success' : 
+  const correlationColor = data.correlation_score > 0.7 ? 'success' :
                           data.correlation_score < -0.7 ? 'danger' : 'warning';
-  
+
   container.innerHTML = `
     <div class="row">
       <div class="col-md-6">
@@ -173,9 +173,9 @@ function updateCorrelationAnalysis(data) {
 function getCorrelationAnalysisText(data) {
   const score = Math.abs(data.correlation_score);
   const type = data.correlation_type;
-  
+
   if (score > 0.8) {
-    return type.includes('CONFLUENCE') ? 
+    return type.includes('CONFLUENCE') ?
       'Strong confluence detected across timeframes. High probability setup.' :
       'Strong divergence detected. Potential reversal opportunity.';
   } else if (score > 0.6) {
@@ -191,23 +191,23 @@ function updateTimeframeSignals(signals) {
     container.innerHTML = '<div class="text-muted">No signals available</div>';
     return;
   }
-  
+
   let html = '<div class="row">';
   const timeframeGroups = {};
-  
+
   // Group signals by timeframe
   signals.forEach(signal => {
     const tf = signal.timeframe || 'unknown';
     if (!timeframeGroups[tf]) timeframeGroups[tf] = [];
     timeframeGroups[tf].push(signal);
   });
-  
+
   // Create cards for each timeframe
   Object.entries(timeframeGroups).forEach(([timeframe, timeframeSignals]) => {
     const latestSignal = timeframeSignals[0]; // Most recent
     const signalType = latestSignal.final_signal?.signal_type || 'unknown';
     const strength = latestSignal.final_signal?.strength || 0;
-    
+
     html += `
       <div class="col-md-3 mb-3">
         <div class="card bg-dark">
@@ -230,7 +230,7 @@ function updateTimeframeSignals(signals) {
       </div>
     `;
   });
-  
+
   html += '</div>';
   container.innerHTML = html;
 }
@@ -258,7 +258,7 @@ function updatePerformanceCharts(signals, correlationData) {
     if (timeframePerformanceChart) {
       timeframePerformanceChart.destroy();
     }
-    
+
     const timeframeData = {};
     signals.forEach(signal => {
       const tf = signal.timeframe || 'unknown';
@@ -267,10 +267,10 @@ function updatePerformanceCharts(signals, correlationData) {
       // Simple win calculation based on signal strength
       if (signal.final_signal?.strength > 0.6) timeframeData[tf].wins++;
     });
-    
+
     const labels = Object.keys(timeframeData);
     const winRates = labels.map(tf => (timeframeData[tf].wins / timeframeData[tf].total) * 100);
-    
+
     timeframePerformanceChart = new Chart(performanceCtx, {
       type: 'bar',
       data: {
@@ -293,27 +293,27 @@ function updatePerformanceCharts(signals, correlationData) {
       }
     });
   }
-  
+
   // Update signal strength distribution chart
   const strengthCtx = document.getElementById('signalStrengthChart');
   if (strengthCtx && signals.length > 0) {
     if (signalStrengthChart) {
       signalStrengthChart.destroy();
     }
-    
+
     const strengthRanges = {
       'Weak (0-40%)': 0,
       'Medium (40-70%)': 0,
       'Strong (70-100%)': 0
     };
-    
+
     signals.forEach(signal => {
       const strength = (signal.final_signal?.strength || 0) * 100;
       if (strength <= 40) strengthRanges['Weak (0-40%)']++;
       else if (strength <= 70) strengthRanges['Medium (40-70%)']++;
       else strengthRanges['Strong (70-100%)']++;
     });
-    
+
     signalStrengthChart = new Chart(strengthCtx, {
       type: 'doughnut',
       data: {
@@ -333,30 +333,30 @@ function updatePerformanceCharts(signals, correlationData) {
       }
     });
   }
-  
+
   // Update historical signals chart
   const historicalCtx = document.getElementById('historicalSignalsChart');
   if (historicalCtx && signals.length > 0) {
     if (historicalSignalsChart) {
       historicalSignalsChart.destroy();
     }
-    
+
     // Group signals by date
     const dailySignals = {};
     signals.forEach(signal => {
       const date = new Date(signal.timestamp).toLocaleDateString();
       if (!dailySignals[date]) dailySignals[date] = { buy: 0, sell: 0, total: 0 };
-      
+
       const signalType = signal.final_signal?.signal_type?.toLowerCase();
       if (signalType === 'buy') dailySignals[date].buy++;
       else if (signalType === 'sell') dailySignals[date].sell++;
       dailySignals[date].total++;
     });
-    
+
     const dates = Object.keys(dailySignals).sort();
     const buyCounts = dates.map(date => dailySignals[date].buy);
     const sellCounts = dates.map(date => dailySignals[date].sell);
-    
+
     historicalSignalsChart = new Chart(historicalCtx, {
       type: 'line',
       data: {
@@ -395,14 +395,14 @@ function updatePerformanceCharts(signals, correlationData) {
 document.addEventListener('DOMContentLoaded', function() {
   // Populate symbol and strategy selects with actual data
   // This could be enhanced to load from API
-  
+
   // Set up event listeners
   document.getElementById('symbolSelect').addEventListener('change', function() {
     if (this.value && document.getElementById('strategySelect').value) {
       loadTimeframeAnalysis();
     }
   });
-  
+
   document.getElementById('strategySelect').addEventListener('change', function() {
     if (this.value && document.getElementById('symbolSelect').value) {
       loadTimeframeAnalysis();

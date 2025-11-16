@@ -19,7 +19,7 @@ import os
 
 class MemoryOptimizer:
     """Advanced memory optimization utility"""
-    
+
     def __init__(self, config_file="memory_optimization_enhanced.json"):
         self.config = self.load_config(config_file)
         self.running = False
@@ -27,7 +27,7 @@ class MemoryOptimizer:
         self.optimization_thread = None
         self.object_cache = weakref.WeakValueDictionary()
         self.setup_logging()
-        
+
     def setup_logging(self):
         """Setup optimized logging"""
         logging.basicConfig(
@@ -42,7 +42,7 @@ class MemoryOptimizer:
             ]
         )
         self.logger = logging.getLogger(__name__)
-    
+
     def load_config(self, config_file):
         """Load memory optimization configuration"""
         try:
@@ -51,7 +51,7 @@ class MemoryOptimizer:
                 return json.load(f)
         except FileNotFoundError:
             return self.get_default_config()
-    
+
     def get_default_config(self):
         """Get default memory optimization configuration"""
         return {
@@ -68,21 +68,21 @@ class MemoryOptimizer:
                 "critical_threshold_percent": 85
             }
         }
-    
+
     def start_optimization(self):
         """Start memory optimization threads"""
         if self.running:
             return
-        
+
         self.running = True
         self.monitor_thread = threading.Thread(target=self._monitor_memory, daemon=True)
         self.optimization_thread = threading.Thread(target=self._optimize_memory, daemon=True)
-        
+
         self.monitor_thread.start()
         self.optimization_thread.start()
-        
+
         self.logger.info("Memory optimization started")
-    
+
     def stop_optimization(self):
         """Stop memory optimization threads"""
         self.running = False
@@ -91,30 +91,30 @@ class MemoryOptimizer:
         if self.optimization_thread:
             self.optimization_thread.join(timeout=5)
         self.logger.info("Memory optimization stopped")
-    
+
     def _monitor_memory(self):
         """Monitor memory usage"""
         while self.running:
             try:
                 memory = psutil.virtual_memory()
                 process = psutil.Process()
-                
+
                 # Check memory thresholds
                 if memory.percent > self.config['memory_profiling']['critical_threshold_percent']:
                     self.logger.critical(f"CRITICAL MEMORY USAGE: {memory.percent:.1f}%")
                     self._emergency_cleanup()
                 elif memory.percent > self.config['memory_profiling']['alert_threshold_percent']:
                     self.logger.warning(f"High memory usage: {memory.percent:.1f}%")
-                
+
                 # Log memory stats
                 self.logger.debug(f"Memory: {memory.percent:.1f}%, Process: {process.memory_info().rss / 1024 / 1024:.1f}MB")
-                
+
                 time.sleep(self.config['memory_profiling']['log_interval_seconds'])
-                
+
             except Exception as e:
                 self.logger.error(f"Memory monitoring error: {e}")
                 time.sleep(60)
-    
+
     def _optimize_memory(self):
         """Perform memory optimization"""
         while self.running:
@@ -126,34 +126,34 @@ class MemoryOptimizer:
                     gc.collect(0)
                 else:
                     gc.collect(0)  # Only young generation
-                
+
                 # Clear large objects
                 self._clear_large_objects()
-                
+
                 # Optimize string interning
                 self._optimize_strings()
-                
+
                 time.sleep(self.config['garbage_collection']['interval_seconds'])
-                
+
             except Exception as e:
                 self.logger.error(f"Memory optimization error: {e}")
                 time.sleep(60)
-    
+
     def _emergency_cleanup(self):
         """Emergency memory cleanup"""
         self.logger.critical("Performing emergency memory cleanup")
-        
+
         # Force multiple garbage collection cycles
         for i in range(3):
             gc.collect(i)
-        
+
         # Clear all caches
         self.object_cache.clear()
-        
+
         # Force Python to release memory
         if hasattr(sys, 'malloc_state'):
             sys.malloc_state = None
-    
+
     def _clear_large_objects(self):
         """Clear large temporary objects"""
         # Clear large lists and dicts from globals
@@ -163,14 +163,14 @@ class MemoryOptimizer:
                 if size > 1024 * 1024:  # > 1MB
                     self.logger.debug(f"Clearing large object: {name} ({size} bytes)")
                     globals()[name] = None
-    
+
     def _optimize_strings(self):
         """Optimize string memory usage"""
         # Enable string interning for common strings
         common_strings = ['buy', 'sell', 'market', 'limit', 'open', 'close', 'high', 'low']
         for s in common_strings:
             intern(s)
-    
+
     @contextmanager
     def memory_context(self):
         """Context manager for memory-intensive operations"""
@@ -182,12 +182,12 @@ class MemoryOptimizer:
             gc.collect(0)
             final_memory = psutil.Process().memory_info().rss
             self.logger.debug(f"Memory context: {((final_memory - initial_memory) / 1024 / 1024):.1f}MB change")
-    
+
     def memory_optimized_cache(maxsize=128):
         """Decorator for memory-optimized caching"""
         def decorator(func):
             cache = OrderedDict()
-            
+
             @functools.wraps(func)
             def wrapper(*args, **kwargs):
                 key = str(args) + str(kwargs)
@@ -196,19 +196,19 @@ class MemoryOptimizer:
                     value = cache.pop(key)
                     cache[key] = value
                     return value
-                
+
                 result = func(*args, **kwargs)
-                
+
                 # Add to cache
                 cache[key] = result
                 cache.move_to_end(key)
-                
+
                 # Maintain cache size
                 while len(cache) > maxsize:
                     cache.popitem(last=False)
-                
+
                 return result
-            
+
             return wrapper
         return decorator
 
@@ -235,7 +235,7 @@ def get_memory_stats():
 if __name__ == "__main__":
     # Start memory optimization
     memory_optimizer.start_optimization()
-    
+
     try:
         while True:
             stats = get_memory_stats()

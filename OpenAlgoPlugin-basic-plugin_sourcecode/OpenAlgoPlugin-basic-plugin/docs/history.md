@@ -20,7 +20,7 @@ Custom Domain:  POST https://<your-custom-domain>/api/v1/history
     "interval": "1m",
     "start_date": "2025-06-26",
     "end_date": "2025-06-27",
-  
+
 }
 
 ```

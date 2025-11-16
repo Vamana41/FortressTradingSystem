@@ -17,11 +17,11 @@ def find_amibroker_folder():
         r"C:\Program Files (x86)\AmiBroker",
         r"C:\AmiBroker",
     ]
-    
+
     for path in common_paths:
         if os.path.exists(path) and os.path.exists(os.path.join(path, "Broker.exe")):
             return path
-    
+
     # Try to find via registry
     try:
         import winreg
@@ -29,14 +29,14 @@ def find_amibroker_folder():
             return winreg.QueryValueEx(key, "Path")[0]
     except:
         pass
-    
+
     return None
 
 def backup_existing_plugin(amibroker_path):
     """Backup existing plugin"""
     plugin_path = os.path.join(amibroker_path, "Plugins", "OpenAlgo.dll")
     backup_path = os.path.join(amibroker_path, "Plugins", "OpenAlgo.dll.backup")
-    
+
     if os.path.exists(plugin_path):
         print(f"Backing up existing plugin to {backup_path}")
         shutil.copy2(plugin_path, backup_path)
@@ -51,24 +51,24 @@ def install_fixed_plugin(amibroker_path):
         r"OpenAlgoPlugin-fixed\OpenAlgoPlugin.dll",
         r"build\OpenAlgoPlugin.dll",
     ]
-    
+
     source_dll = None
     for location in possible_locations:
         if os.path.exists(location):
             source_dll = location
             break
-    
+
     if not source_dll:
         print("❌ Fixed plugin DLL not found in any of the expected locations:")
         for location in possible_locations:
             print(f"  - {location}")
         return False
-    
+
     target_dll = os.path.join(amibroker_path, "Plugins", "OpenAlgo.dll")
-    
+
     print(f"Installing fixed plugin from {source_dll}")
     print(f"To: {target_dll}")
-    
+
     try:
         shutil.copy2(source_dll, target_dll)
         return True
@@ -88,19 +88,19 @@ def create_plugin_config():
         "retry_attempts": 3,
         "quote_cache_ttl": 1000
     }
-    
+
     config_path = "OpenAlgoPlugin-config.json"
-    
+
     with open(config_path, "w") as f:
         json.dump(config, f, indent=2)
-    
+
     print(f"Plugin configuration created at {config_path}")
 
 def main():
     """Main function"""
     print("OpenAlgo AmiBroker Fixed Plugin Installer")
     print("=" * 50)
-    
+
     # Find AmiBroker
     amibroker_path = find_amibroker_folder()
     if not amibroker_path:
@@ -110,15 +110,15 @@ def main():
         print("- OpenAlgo.Plugin (1)\\OpenAlgo Plugin\\64bit\\OpenAlgo.dll")
         print("- OpenAlgoPlugin-fixed\\OpenAlgoPlugin.dll")
         return
-    
+
     print(f"Found AmiBroker at: {amibroker_path}")
-    
+
     # Backup existing plugin
     backup_existing_plugin(amibroker_path)
-    
+
     # Create plugin configuration
     create_plugin_config()
-    
+
     # Install fixed plugin
     if install_fixed_plugin(amibroker_path):
         print("\n✅ Fixed plugin installed successfully!")

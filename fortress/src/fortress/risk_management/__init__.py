@@ -8,7 +8,7 @@ from .risk_manager import RiskManager, RiskManagementConfig
 
 __all__ = [
     "PositionSizer",
-    "SizingMethod", 
+    "SizingMethod",
     "PositionSizingResult",
     "RiskLimits",
     "RiskLimitsConfig",

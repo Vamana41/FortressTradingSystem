@@ -9,12 +9,12 @@ import sys
 
 def diagnose_fyers_connection():
     """Diagnose Fyers connection issues"""
-    
+
     base_url = "http://localhost:5000"
-    
+
     print("🔍 Diagnosing Fyers Connection Issues")
     print("=" * 50)
-    
+
     # Test basic server connectivity
     try:
         response = requests.get(f"{base_url}/", timeout=10)
@@ -22,7 +22,7 @@ def diagnose_fyers_connection():
     except Exception as e:
         print(f"❌ Server Error: {e}")
         return
-    
+
     # Test broker status endpoint
     try:
         response = requests.post(
@@ -38,16 +38,16 @@ def diagnose_fyers_connection():
             print(f"❌ Broker Status Error: {response.text}")
     except Exception as e:
         print(f"❌ Broker Status Error: {e}")
-    
+
     # Test Fyers-specific endpoints
     endpoints = [
         "/api/v1/funds",
-        "/api/v1/positionbook", 
+        "/api/v1/positionbook",
         "/api/v1/orderbook",
         "/api/v1/holdings",
         "/api/v1/profile"
     ]
-    
+
     print("\n🔍 Testing Fyers-specific Endpoints:")
     for endpoint in endpoints:
         try:
@@ -61,7 +61,7 @@ def diagnose_fyers_connection():
                 print(f"    Error: {response.text[:200]}")
         except Exception as e:
             print(f"  {endpoint}: Error - {e}")
-    
+
     # Check if we can get more detailed error info
     print("\n🔍 Checking for Detailed Error Messages:")
     try:

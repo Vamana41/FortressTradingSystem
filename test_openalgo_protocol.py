@@ -9,9 +9,9 @@ import json
 
 async def test_protocol():
     """Test different WebSocket message formats"""
-    
+
     uri = "ws://127.0.0.1:8765"
-    
+
     test_messages = [
         {"action": "subscribe", "symbols": ["SBIN", "RELIANCE"]},
         {"action": "add_symbols", "symbols": ["SBIN", "RELIANCE"]},
@@ -22,13 +22,13 @@ async def test_protocol():
         {"action": "ping"},
         {"type": "ping"},
     ]
-    
+
     try:
         print(f"Connecting to OpenAlgo WebSocket at {uri}...")
         async with websockets.connect(uri) as websocket:
             print("✅ Connected to OpenAlgo WebSocket!")
             print()
-            
+
             for i, message in enumerate(test_messages):
                 print(f"Test {i+1}: {message}")
                 try:
@@ -40,7 +40,7 @@ async def test_protocol():
                 except Exception as e:
                     print(f"  Error: {e}")
                 print()
-                
+
     except Exception as e:
         print(f"❌ WebSocket connection failed: {e}")
 

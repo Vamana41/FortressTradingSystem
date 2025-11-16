@@ -25,27 +25,27 @@ class OpenAlgoNativeInjector:
         self.base_url = 'http://127.0.0.1:5000/api/v1'
         self.ws_url = 'ws://127.0.0.1:8765'
         self.websocket = None
-        
+
         # All symbols from your original system
         self.all_symbols = [
             "SBIN", "RELIANCE", "TCS", "INFY", "ITC",
             "CRUDEOIL", "NATURALGAS", "GOLD", "SILVER", "COPPER", "NICKEL"
         ]
-        
+
         # ATM options placeholders
         self.atm_symbols = []
-        
+
     async def get_atm_options(self):
         """Get ATM options using OpenAlgo native OptionSymbol API"""
         try:
             # Calculate next expiry date (last Thursday of current month)
             from datetime import datetime, timedelta
             import calendar
-            
+
             today = datetime.now()
             last_day = calendar.monthrange(today.year, today.month)[1]
             last_thursday = last_day - ((last_day - calendar.THURSDAY) % 7)
-            
+
             if last_thursday < today.day:
                 # Next month
                 if today.month == 12:
@@ -59,9 +59,9 @@ class OpenAlgoNativeInjector:
                 expiry_date = f"{last_thursday:02d}{calendar.month_abbr[next_month].upper()}{str(next_year)[2:]}"
             else:
                 expiry_date = f"{last_thursday:02d}{calendar.month_abbr[today.month].upper()}{str(today.year)[2:]}"
-            
+
             logger.info(f"Getting ATM options for expiry: {expiry_date}")
-            
+
             # Get NIFTY ATM CE
             nifty_ce_data = {
                 "apikey": self.api_key,
@@ -73,7 +73,7 @@ class OpenAlgoNativeInjector:
                 "offset": "ATM",
                 "option_type": "CE"
             }
-            
+
             response = requests.post(f"{self.base_url}/optionsymbol", json=nifty_ce_data, timeout=10)
             if response.status_code == 200:
                 result = response.json()
@@ -81,7 +81,7 @@ class OpenAlgoNativeInjector:
                     nifty_ce = result.get("symbol")
                     logger.info(f"NIFTY ATM CE: {nifty_ce}")
                     self.atm_symbols.append({"symbol": nifty_ce, "exchange": "NFO"})
-                    
+
                     # Get NIFTY ATM PE
                     nifty_pe_data = nifty_ce_data.copy()
                     nifty_pe_data["option_type"] = "PE"
@@ -92,7 +92,7 @@ class OpenAlgoNativeInjector:
                             nifty_pe = result.get("symbol")
                             logger.info(f"NIFTY ATM PE: {nifty_pe}")
                             self.atm_symbols.append({"symbol": nifty_pe, "exchange": "NFO"})
-            
+
             # Get BANKNIFTY ATM CE
             banknifty_ce_data = {
                 "apikey": self.api_key,
@@ -104,7 +104,7 @@ class OpenAlgoNativeInjector:
                 "offset": "ATM",
                 "option_type": "CE"
             }
-            
+
             response = requests.post(f"{self.base_url}/optionsymbol", json=banknifty_ce_data, timeout=10)
             if response.status_code == 200:
                 result = response.json()
@@ -112,7 +112,7 @@ class OpenAlgoNativeInjector:
                     banknifty_ce = result.get("symbol")
                     logger.info(f"BANKNIFTY ATM CE: {banknifty_ce}")
                     self.atm_symbols.append({"symbol": banknifty_ce, "exchange": "NFO"})
-                    
+
                     # Get BANKNIFTY ATM PE
                     banknifty_pe_data = banknifty_ce_data.copy()
                     banknifty_pe_data["option_type"] = "PE"
@@ -123,10 +123,10 @@ class OpenAlgoNativeInjector:
                             banknifty_pe = result.get("symbol")
                             logger.info(f"BANKNIFTY ATM PE: {banknifty_pe}")
                             self.atm_symbols.append({"symbol": banknifty_pe, "exchange": "NFO"})
-                            
+
         except Exception as e:
             logger.error(f"ATM options error: {e}")
-    
+
     async def connect_websocket(self):
         """Connect to OpenAlgo WebSocket"""
         try:
@@ -137,7 +137,7 @@ class OpenAlgoNativeInjector:
         except Exception as e:
             logger.error(f"❌ Failed to connect to WebSocket: {e}")
             return False
-    
+
     async def inject_symbol(self, symbol, exchange="NSE"):
         """Inject a single symbol using OpenAlgo native API"""
         try:
@@ -148,9 +148,9 @@ class OpenAlgoNativeInjector:
                 "exchange": exchange,
                 "symbol": symbol
             }
-            
+
             logger.info(f"Injecting {exchange}:{symbol} into AmiBroker...")
-            
+
             # Send through WebSocket for real-time injection
             if self.websocket:
                 await self.websocket.send(json.dumps(injection_data))
@@ -159,23 +159,23 @@ class OpenAlgoNativeInjector:
             else:
                 logger.error("❌ WebSocket not connected")
                 return False
-                
+
         except Exception as e:
             logger.error(f"❌ Failed to inject {exchange}:{symbol}: {e}")
             return False
-    
+
     async def inject_all_symbols(self):
         """Inject all symbols using native OpenAlgo methods"""
         logger.info("="*60)
         logger.info("OPENALGO NATIVE SYMBOL INJECTOR")
         logger.info("="*60)
-        
+
         # Get ATM options first
         await self.get_atm_options()
-        
+
         # All symbols to inject
         all_symbols_to_inject = []
-        
+
         # Add equity symbols
         for symbol in self.all_symbols:
             if symbol in ["CRUDEOIL", "NATURALGAS", "GOLD", "SILVER", "COPPER", "NICKEL"]:
@@ -184,39 +184,39 @@ class OpenAlgoNativeInjector:
             else:
                 # NSE stocks
                 all_symbols_to_inject.append({"symbol": symbol, "exchange": "NSE"})
-        
+
         # Add ATM options
         for atm_option in self.atm_symbols:
             all_symbols_to_inject.append(atm_option)
-        
+
         logger.info(f"Injecting {len(all_symbols_to_inject)} symbols:")
         for symbol_info in all_symbols_to_inject:
             logger.info(f"  - {symbol_info['exchange']}:{symbol_info['symbol']}")
-        
+
         # Connect to WebSocket
         if not await self.connect_websocket():
             logger.error("❌ Failed to connect to OpenAlgo WebSocket")
             return
-        
+
         # Inject all symbols
         success_count = 0
         for symbol_info in all_symbols_to_inject:
             if await self.inject_symbol(symbol_info["symbol"], symbol_info["exchange"]):
                 success_count += 1
             await asyncio.sleep(0.1)  # Small delay between injections
-        
+
         logger.info(f"✅ Successfully injected {success_count}/{len(all_symbols_to_inject)} symbols")
-        
+
         if success_count > 0:
             logger.info("🎉 SYMBOLS INJECTED INTO AMIBROKER!")
             logger.info("✅ Check AmiBroker - symbols should now be available!")
             logger.info("✅ OpenAlgo will now feed real-time data for all injected symbols!")
-            
+
             # Keep connection alive
             await self.keep_alive()
         else:
             logger.error("❌ Failed to inject any symbols")
-    
+
     async def keep_alive(self):
         """Keep WebSocket connection alive"""
         logger.info("Keeping connection alive for symbol data feed...")

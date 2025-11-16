@@ -21,11 +21,11 @@ ph = PasswordHasher()
 def register_api_key(api_key, user_id="fortress_system"):
     """
     Register an API key in the OpenAlgo database.
-    
+
     Args:
         api_key: The API key to register
         user_id: The user ID to associate with the API key
-    
+
     Returns:
         bool: True if successful, False otherwise
     """
@@ -33,13 +33,13 @@ def register_api_key(api_key, user_id="fortress_system"):
         # Get pepper from environment
         pepper = os.getenv('API_KEY_PEPPER', 'default-pepper-change-in-production')
         peppered_key = api_key + pepper
-        
+
         # Hash the API key
         api_key_hash = ph.hash(peppered_key)
-        
+
         # Use global database session
         session = db_session
-        
+
         # Check if API key already exists for this user
         existing_key = session.query(ApiKeys).filter_by(user_id=user_id).first()
         if existing_key:
@@ -54,12 +54,12 @@ def register_api_key(api_key, user_id="fortress_system"):
                 api_key_encrypted=api_key
             )
             session.add(new_key)
-        
+
         session.commit()
-        
+
         logger.info(f"API key registered successfully for user: {user_id}")
         return True
-        
+
     except Exception as e:
         logger.error(f"Error registering API key: {e}")
         return False
@@ -70,12 +70,12 @@ def main():
         print("Usage: python register_api_key.py <api_key>")
         print("Example: python register_api_key.py 89cd257b0bee93f6798130ca99d487a7641a994b567c7646a96775d6c1d425f0")
         sys.exit(1)
-    
+
     api_key = sys.argv[1]
-    
+
     # Initialize database
     init_db()
-    
+
     # Register the API key
     if register_api_key(api_key):
         print(f"✅ API key registered successfully!")

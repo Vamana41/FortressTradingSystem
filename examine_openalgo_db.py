@@ -9,27 +9,27 @@ import os
 def examine_database(db_path):
     """Examine the structure and contents of a SQLite database."""
     print(f"\n=== Examining {db_path} ===")
-    
+
     try:
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
-        
+
         # Get all tables
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
         tables = cursor.fetchall()
-        
+
         print(f"Found {len(tables)} tables:")
         for table in tables:
             table_name = table[0]
             print(f"\nTable: {table_name}")
-            
+
             # Get table schema
             cursor.execute(f"PRAGMA table_info({table_name});")
             columns = cursor.fetchall()
             print("Columns:")
             for col in columns:
                 print(f"  {col[1]} ({col[2]})")
-            
+
             # Get sample data (first 3 rows)
             cursor.execute(f"SELECT * FROM {table_name} LIMIT 3;")
             rows = cursor.fetchall()
@@ -39,9 +39,9 @@ def examine_database(db_path):
                     print(f"  Row {i+1}: {row}")
             else:
                 print("  No data in this table")
-        
+
         conn.close()
-        
+
     except Exception as e:
         print(f"Error examining {db_path}: {e}")
 
@@ -53,7 +53,7 @@ def main():
         examine_database(openalgo_db)
     else:
         print(f"OpenAlgo database not found at {openalgo_db}")
-    
+
     # Check the backup database
     backup_db = "openalgo_backup_1763227490/openalgo.db"
     if os.path.exists(backup_db):

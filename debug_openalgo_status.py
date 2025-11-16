@@ -20,7 +20,7 @@ def debug_user_status():
         from database.auth_db import get_api_key_for_tradingview, verify_api_key
         from database.auth_db import ApiKeys
         from database import auth_db
-        
+
         # Check admin user
         admin_user = find_user_by_username()
         if admin_user:
@@ -32,25 +32,25 @@ def debug_user_status():
         else:
             print("No admin user found!")
             return
-            
+
         # Check API keys
         print(f"\nChecking API keys for user ID: {admin_user.id}")
-        
+
         # Query all API keys
         all_keys = ApiKeys.query.all()
         print(f"Total API keys in database: {len(all_keys)}")
-        
+
         for key in all_keys:
             print(f"\nAPI Key {key.id}:")
             print(f"  User ID: {key.user_id}")
             print(f"  Created: {key.created_at}")
-            
+
             # Try to get the decrypted key
             try:
                 decrypted_key = get_api_key_for_tradingview(key.user_id)
                 if decrypted_key:
                     print(f"  Decrypted Key: {decrypted_key}")
-                    
+
                     # Test verification
                     is_valid = verify_api_key(decrypted_key)
                     print(f"  Verification: {'✓ Valid' if is_valid else '✗ Invalid'}")
@@ -58,7 +58,7 @@ def debug_user_status():
                     print(f"  Could not decrypt key")
             except Exception as e:
                 print(f"  Error decrypting: {e}")
-                
+
     except Exception as e:
         print(f"Error debugging user status: {e}")
         import traceback
@@ -68,7 +68,7 @@ def main():
     """Main function."""
     print("OpenAlgo User and API Key Debug")
     print("=" * 40)
-    
+
     debug_user_status()
 
 if __name__ == "__main__":

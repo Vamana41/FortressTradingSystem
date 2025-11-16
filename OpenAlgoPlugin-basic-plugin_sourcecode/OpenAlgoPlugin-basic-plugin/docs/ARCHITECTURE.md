@@ -190,19 +190,19 @@ if (quoteIndex > 0) {
 ```
 1. AmiBroker Request
    └─> GetRecentInfo(symbol)
-   
+
 2. Subscription Check
    └─> Is symbol subscribed?
        ├─> No: Subscribe via WebSocket
        └─> Yes: Continue
-       
+
 3. Data Retrieval
    └─> Check cache
        ├─> Cache hit (< 5 sec): Return cached
        └─> Cache miss: Check WebSocket buffer
            ├─> Data available: Update cache
            └─> No data: Fallback to HTTP API
-           
+
 4. Return to AmiBroker
    └─> RecentInfo structure
 ```
@@ -212,21 +212,21 @@ if (quoteIndex > 0) {
 ```
 1. AmiBroker Request
    └─> GetQuotesEx(symbol, periodicity, range)
-   
+
 2. Range Calculation
    └─> Has existing data?
        ├─> Yes: Fetch today only
        └─> No: Fetch full range
-       
+
 3. API Request
    └─> POST /api/v1/history
-   
+
 4. Data Processing
    └─> Parse JSON response
    └─> Convert timestamps
    └─> Handle duplicates
    └─> Merge with existing
-   
+
 5. Return to AmiBroker
    └─> Quotation array
 ```
@@ -327,11 +327,11 @@ Network Error → Exception → Error Handler → Status Update → User Notific
 ```
 1. API Key Storage (Registry)
    └─> Encrypted: No (TODO)
-   
+
 2. Authentication Request
    └─> HTTPS/WSS preferred
    └─> API key in JSON body
-   
+
 3. Session Management
    └─> WebSocket: Persistent auth
    └─> HTTP: Per-request auth

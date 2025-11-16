@@ -19,13 +19,13 @@ def extract_api_key():
     try:
         # Get the Reeshoo user's API key from database
         api_key_record = ApiKeys.query.filter_by(user_id='Reeshoo').first()
-        
+
         if not api_key_record:
             print("❌ No API key found for user 'Reeshoo'")
             return None
-        
+
         print(f"Found API key record for Reeshoo (created: {api_key_record.created_at})")
-        
+
         # Decrypt the API key
         try:
             decrypted_key = fernet.decrypt(api_key_record.api_key_encrypted.encode()).decode()
@@ -34,7 +34,7 @@ def extract_api_key():
         except Exception as e:
             print(f"❌ Error decrypting API key: {e}")
             return None
-            
+
     except Exception as e:
         print(f"❌ Error extracting API key: {e}")
         return None
@@ -42,9 +42,9 @@ def extract_api_key():
 def main():
     """Main function."""
     print("Extracting OpenAlgo API key for Reeshoo user...")
-    
+
     api_key = extract_api_key()
-    
+
     if api_key:
         print(f"\n✅ Successfully extracted API key: {api_key}")
         print(f"\nTo use this API key in Fortress, update your .env file with:")

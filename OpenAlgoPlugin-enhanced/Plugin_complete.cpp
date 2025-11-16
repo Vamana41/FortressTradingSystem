@@ -92,8 +92,8 @@ struct QuoteCache {
 	float oi;
 	DWORD lastUpdate;
 	DWORD ttl;  // Time to live in milliseconds
-	
-	QuoteCache() : ltp(0.0f), open(0.0f), high(0.0f), low(0.0f), 
+
+	QuoteCache() : ltp(0.0f), open(0.0f), high(0.0f), low(0.0f),
 	               close(0.0f), volume(0.0f), oi(0.0f), lastUpdate(0), ttl(5000) {
 	}
 };
@@ -151,10 +151,10 @@ void LogError(LPCTSTR pszMessage)
 	CString logMsg;
 	logMsg.Format(_T("[ERROR] %s"), pszMessage);
 	OutputDebugString(logMsg);
-	
+
 	// Increment failure counter
 	g_nConsecutiveFailures++;
-	
+
 	// If too many consecutive failures, mark as disconnected
 	if (g_nConsecutiveFailures > 10)
 	{
@@ -182,15 +182,15 @@ BOOL IsValidResponse(const CString& response)
 {
 	if (response.IsEmpty())
 		return FALSE;
-		
+
 	// Check for basic JSON structure
 	if (response.Find(_T("{")) < 0 || response.Find(_T("}")) < 0)
 		return FALSE;
-		
+
 	// Check for error indicators
 	if (response.Find(_T("\"error\"")) >= 0 || response.Find(_T("\"failed\"")) >= 0)
 		return FALSE;
-		
+
 	return TRUE;
 }
 
@@ -199,7 +199,7 @@ BOOL IsConnectionTimeout(void)
 {
 	if (!g_bConnectionInProgress)
 		return FALSE;
-		
+
 	DWORD dwElapsed = GetTickCount64() - g_dwConnectionStartTime;
 	return (dwElapsed > CONNECTION_TIMEOUT_MS);
 }
@@ -209,13 +209,13 @@ void ResetConnectionState(void)
 	g_bConnectionInProgress = FALSE;
 	g_dwConnectionStartTime = 0;
 	g_bWebSocketConnecting = FALSE;
-	
+
 	if (g_websocket != INVALID_SOCKET)
 	{
 		closesocket(g_websocket);
 		g_websocket = INVALID_SOCKET;
 	}
-	
+
 	g_bWebSocketConnected = FALSE;
 	g_bWebSocketAuthenticated = FALSE;
 }
@@ -284,7 +284,7 @@ CString GetExchangeFromTicker(LPCTSTR pszTicker)
 	{
 		return ticker.Mid(dashPos + 1);
 	}
-	
+
 	return _T("NSE");
 }
 
@@ -403,7 +403,7 @@ BOOL GetOpenAlgoQuote(LPCTSTR pszTicker, QuoteCache& quote)
 						{
 							// Parse quote data with error checking
 							int pos;
-							
+
 							// Parse LTP
 							pos = oResponse.Find(_T("\"ltp\":"));
 							if (pos >= 0)
@@ -696,7 +696,7 @@ skip_gap_detection:
 								int dataEnd = oResponse.Find(_T("]"), dataStart);
 								if (dataEnd < 0) dataEnd = oResponse.GetLength();
 								CString dataArray = oResponse.Mid(dataStart, dataEnd - dataStart);
-								
+
 								if (dataArray.GetLength() < 10)
 								{
 									LogWarning(_T("Insufficient historical data returned"));
@@ -706,7 +706,7 @@ skip_gap_detection:
 								// Parse candles with duplicate detection
 								int quoteIndex = 0;
 								int pos = 0;
-								
+
 								BOOL bHasExistingData = (nLastValid >= 0);
 								if (bHasExistingData)
 								{
@@ -1084,7 +1084,7 @@ VOID CALLBACK OnTimerProc(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime)
 	if (idEvent == TIMER_INIT || idEvent == TIMER_REFRESH)
 	{
 		LogInfo(_T("Timer triggered - testing connection"));
-		
+
 		if (!TestOpenAlgoConnection())
 		{
 			if (g_hAmiBrokerWnd != NULL)
@@ -1122,19 +1122,19 @@ VOID CALLBACK OnTimerProc(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime)
 unsigned __stdcall WebSocketThreadProc(void* pParam)
 {
 	AFX_MANAGE_STATE(AfxGetStaticModuleState());
-	
+
 	LogInfo(_T("WebSocket thread started"));
-	
+
 	while (g_bWebSocketThreadRunning)
 	{
 		if (g_bWebSocketConnected && g_bWebSocketAuthenticated)
 		{
 			ProcessWebSocketDataNonBlocking();
 		}
-		
+
 		Sleep(100); // 100ms polling interval
 	}
-	
+
 	LogInfo(_T("WebSocket thread stopped"));
 	return 0;
 }
@@ -1171,7 +1171,7 @@ BOOL InitializeWebSocket(void)
 		g_bWebSocketThreadRunning = TRUE;
 		unsigned threadID;
 		g_hWebSocketThread = (HANDLE)_beginthreadex(NULL, 0, WebSocketThreadProc, NULL, 0, &threadID);
-		
+
 		if (g_hWebSocketThread == NULL)
 		{
 			LogError(_T("Failed to create WebSocket thread"));
@@ -1184,7 +1184,7 @@ BOOL InitializeWebSocket(void)
 	// Attempt connection
 	BOOL result = ConnectWebSocketNonBlocking();
 	g_bWebSocketConnecting = FALSE;
-	
+
 	return result;
 }
 
@@ -1202,7 +1202,7 @@ BOOL ConnectWebSocketNonBlocking(void)
 	// Parse WebSocket URL
 	CString host, path;
 	int port = 80;
-	
+
 	CString url = g_oWebSocketUrl;
 	if (url.Left(5) == _T("wss://"))
 	{
@@ -1213,7 +1213,7 @@ BOOL ConnectWebSocketNonBlocking(void)
 	{
 		url = url.Mid(5);
 	}
-	
+
 	int slashPos = url.Find(_T('/'));
 	if (slashPos > 0)
 	{
@@ -1225,7 +1225,7 @@ BOOL ConnectWebSocketNonBlocking(void)
 		host = url;
 		path = _T("/");
 	}
-	
+
 	int colonPos = host.Find(_T(':'));
 	if (colonPos > 0)
 	{
@@ -1233,7 +1233,7 @@ BOOL ConnectWebSocketNonBlocking(void)
 		port = _ttoi(portStr);
 		host = host.Left(colonPos);
 	}
-	
+
 	// Create socket with timeout
 	g_websocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (g_websocket == INVALID_SOCKET)
@@ -1242,7 +1242,7 @@ BOOL ConnectWebSocketNonBlocking(void)
 		WSACleanup();
 		return FALSE;
 	}
-	
+
 	// Set socket to non-blocking mode immediately
 	u_long mode = 1;
 	if (ioctlsocket(g_websocket, FIONBIO, &mode) != 0)
@@ -1253,18 +1253,18 @@ BOOL ConnectWebSocketNonBlocking(void)
 		WSACleanup();
 		return FALSE;
 	}
-	
+
 	// Resolve hostname
 	struct addrinfo hints, *result;
 	ZeroMemory(&hints, sizeof(hints));
 	hints.ai_family = AF_INET;
 	hints.ai_socktype = SOCK_STREAM;
 	hints.ai_protocol = IPPROTO_TCP;
-	
+
 	CStringA hostA(host);
 	CStringA portStrA;
 	portStrA.Format("%d", port);
-	
+
 	if (getaddrinfo(hostA, portStrA, &hints, &result) != 0)
 	{
 		LogError(_T("Failed to resolve WebSocket host"));
@@ -1273,7 +1273,7 @@ BOOL ConnectWebSocketNonBlocking(void)
 		WSACleanup();
 		return FALSE;
 	}
-	
+
 	// Connect with timeout using select
 	if (connect(g_websocket, result->ai_addr, (int)result->ai_addrlen) == SOCKET_ERROR)
 	{

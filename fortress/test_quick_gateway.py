@@ -18,7 +18,7 @@ from fortress.integrations.openalgo_gateway import OpenAlgoGateway
 
 class MockOpenAlgoGateway(OpenAlgoGateway):
     """Mock OpenAlgo Gateway for testing"""
-    
+
     def __init__(self, api_key: str, base_url: str = "http://localhost:8080/api/v1", event_bus=None):
         super().__init__(api_key, base_url, event_bus)
         self.mock_positions = []
@@ -30,11 +30,11 @@ class MockOpenAlgoGateway(OpenAlgoGateway):
         }
         self.order_counter = 0
         self.mock_orders = {}
-    
+
     async def _make_request(self, method: str, endpoint: str, data: dict = None, params: dict = None) -> dict:
         """Mock implementation"""
         await asyncio.sleep(0.01)  # Minimal delay
-        
+
         if endpoint == "positions":
             return {"status": "success", "data": self.mock_positions}
         elif endpoint == "funds":
@@ -63,15 +63,15 @@ async def quick_test():
     """Quick integration test"""
     print("🚀 Quick OpenAlgo Gateway Integration Test")
     print("=" * 50)
-    
+
     # Create event bus
     event_bus = EventBus()
     await event_bus.connect()
-    
+
     # Create worker
     worker = FortressWorker(event_bus)
     await worker.initialize()
-    
+
     # Replace with mock gateway
     worker.openalgo_gateway = MockOpenAlgoGateway(
         api_key="test_key",
@@ -79,13 +79,13 @@ async def quick_test():
         event_bus=event_bus
     )
     await worker.openalgo_gateway.connect()
-    
+
     try:
         # Test 1: Position sync
         print("\n📊 Test 1: Position Synchronization")
         success = await worker.synchronize_with_broker()
         print(f"✅ Position sync: {success}")
-        
+
         # Test 2: Small order execution (no slicing needed)
         print("\n📈 Test 2: Small Order Execution")
         small_job = {
@@ -96,10 +96,10 @@ async def quick_test():
             "price": 100.0,
             "strategy_name": "TEST_STRATEGY"
         }
-        
+
         result = await worker.execute_trade_job(small_job)
         print(f"✅ Small order execution: {result}")
-        
+
         # Test 3: Medium order with slicing
         print("\n📊 Test 3: Medium Order with Slicing")
         medium_job = {
@@ -110,18 +110,18 @@ async def quick_test():
             "price": 200.0,
             "strategy_name": "TEST_STRATEGY"
         }
-        
+
         result = await worker.execute_trade_job(medium_job)
         print(f"✅ Medium order execution: {result}")
-        
+
         print("\n🎉 All tests completed successfully!")
         print("=" * 50)
-        
+
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
         traceback.print_exc()
-        
+
     finally:
         await worker.cleanup()
         await event_bus.disconnect()

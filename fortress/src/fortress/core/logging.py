@@ -18,26 +18,26 @@ def configure_structlog(
     include_source: bool = True,
 ) -> None:
     """Configure structured logging for the trading system."""
-    
+
     # Configure standard library logging
     logging.basicConfig(
         format="%(message)s",
         stream=sys.stdout,
         level=getattr(logging, log_level.upper()),
     )
-    
+
     # Configure structlog processors
     processors = []
-    
+
     if include_timestamp:
         processors.append(structlog.stdlib.add_log_level)
         processors.append(structlog.stdlib.add_logger_name)
         processors.append(structlog.dev.set_exc_info)
         processors.append(structlog.processors.TimeStamper(fmt="iso"))
-    
+
     if include_source:
         processors.append(add_source_info)
-    
+
     # Add trading-specific processors
     processors.extend([
         add_trading_context,
@@ -46,12 +46,12 @@ def configure_structlog(
         structlog.processors.format_exc_info,
         structlog.processors.UnicodeDecoder(),
     ])
-    
+
     if json_format:
         processors.append(structlog.processors.JSONRenderer())
     else:
         processors.append(structlog.dev.ConsoleRenderer())
-    
+
     # Configure structlog
     structlog.configure(
         processors=processors,
@@ -65,7 +65,7 @@ def configure_structlog(
 def add_source_info(logger: str, method_name: str, event_dict: Dict[str, Any]) -> Dict[str, Any]:
     """Add source code information to log entries."""
     import inspect
-    
+
     # Get the calling frame (skip this function and structlog internals)
     frame = inspect.currentframe()
     try:
@@ -80,7 +80,7 @@ def add_source_info(logger: str, method_name: str, event_dict: Dict[str, Any]) -
             frame = frame.f_back
     finally:
         del frame  # Avoid reference cycles
-    
+
     return event_dict
 
 
@@ -90,7 +90,7 @@ def add_trading_context(logger: str, method_name: str, event_dict: Dict[str, Any
     if hasattr(logging, "trading_context"):
         context = getattr(logging, "trading_context")
         event_dict.update(context)
-    
+
     return event_dict
 
 
@@ -104,18 +104,18 @@ def add_performance_metrics(logger: str, method_name: str, event_dict: Dict[str,
         event_dict["cpu_percent"] = process.cpu_percent()
     except ImportError:
         pass
-    
+
     return event_dict
 
 
 class TradingContext:
     """Context manager for trading-specific logging context."""
-    
+
     def __init__(self, **context: Any):
         """Initialize trading context."""
         self.context = context
         self._original_context = {}
-    
+
     def __enter__(self) -> TradingContext:
         """Enter context."""
         # Store original context
@@ -123,11 +123,11 @@ class TradingContext:
             self._original_context = getattr(logging, "trading_context").copy()
         else:
             setattr(logging, "trading_context", {})
-        
+
         # Update with new context
         getattr(logging, "trading_context").update(self.context)
         return self
-    
+
     def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         """Exit context."""
         # Restore original context
@@ -158,10 +158,10 @@ def log_trading_event(
         "price": price,
     }
     log_data.update(kwargs)
-    
+
     # Remove None values
     log_data = {k: v for k, v in log_data.items() if v is not None}
-    
+
     logger.info("Trading event", **log_data)
 
 
@@ -191,10 +191,10 @@ def log_order_event(
         "average_price": average_price,
     }
     log_data.update(kwargs)
-    
+
     # Remove None values
     log_data = {k: v for k, v in log_data.items() if v is not None}
-    
+
     logger.info("Order event", **log_data)
 
 
@@ -216,10 +216,10 @@ def log_risk_event(
         "required_margin": required_margin,
     }
     log_data.update(kwargs)
-    
+
     # Remove None values
     log_data = {k: v for k, v in log_data.items() if v is not None}
-    
+
     logger.info("Risk event", **log_data)
 
 
@@ -237,7 +237,7 @@ def log_performance_metrics(
         "success": success,
     }
     log_data.update(kwargs)
-    
+
     if success:
         logger.info("Performance metric", **log_data)
     else:

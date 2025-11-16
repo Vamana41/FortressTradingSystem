@@ -6,7 +6,7 @@ Based on official documentation and research, here are ALL OpenAlgo API endpoint
 
 ### 1. Account & Portfolio APIs
 - ✅ `/api/v1/funds` - Get account funds and margins
-- ✅ `/api/v1/positions` - Get current open positions  
+- ✅ `/api/v1/positions` - Get current open positions
 - ❌ `/api/v1/orderbook` - Retrieve all orders for the day
 - ❌ `/api/v1/tradebook` - Get executed trades
 - ❌ `/api/v1/positionbook` - View current open positions (detailed)
@@ -51,7 +51,7 @@ Based on official documentation and research, here are ALL OpenAlgo API endpoint
 
 **✅ IMPLEMENTED (26 endpoints):**
 - ✅ `/api/v1/funds` - Get account funds and margins
-- ✅ `/api/v1/positions` - Get current open positions  
+- ✅ `/api/v1/positions` - Get current open positions
 - ✅ `/api/v1/orderbook` - Retrieve all orders for the day
 - ✅ `/api/v1/tradebook` - Get executed trades
 - ✅ `/api/v1/positionbook` - View current open positions (detailed)

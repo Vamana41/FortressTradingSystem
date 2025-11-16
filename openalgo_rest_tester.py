@@ -28,11 +28,11 @@ ALL_SYMBOLS = [
     {"symbol": "TCS", "exchange": "NSE"},
     {"symbol": "INFY", "exchange": "NSE"},
     {"symbol": "ITC", "exchange": "NSE"},
-    
+
     # Nifty and BankNifty for ATM options
     {"symbol": "NIFTY", "exchange": "NSE"},
     {"symbol": "BANKNIFTY", "exchange": "NSE"},
-    
+
     # MCX Commodities
     {"symbol": "CRUDEOIL", "exchange": "MCX"},
     {"symbol": "GOLD", "exchange": "MCX"},
@@ -45,7 +45,7 @@ def test_symbol_via_rest(symbol_info: Dict[str, str]) -> bool:
     """Test if a symbol works via REST API"""
     symbol = symbol_info["symbol"]
     exchange = symbol_info["exchange"]
-    
+
     try:
         url = f"{OPENALGO_BASE_URL}/quotes"
         payload = {
@@ -53,9 +53,9 @@ def test_symbol_via_rest(symbol_info: Dict[str, str]) -> bool:
             "exchange": exchange,
             "symbol": symbol
         }
-        
+
         response = requests.post(url, json=payload, timeout=10)
-        
+
         if response.status_code == 200:
             data = response.json()
             if data.get("status") == "success":
@@ -70,7 +70,7 @@ def test_symbol_via_rest(symbol_info: Dict[str, str]) -> bool:
         else:
             logger.error(f"❌ HTTP error for {symbol}: {response.status_code}")
             return False
-            
+
     except Exception as e:
         logger.error(f"❌ Failed to test {symbol}: {e}")
         return False
@@ -83,23 +83,23 @@ def main():
     logger.info("Testing all symbols via OpenAlgo REST API")
     logger.info("This will show which symbols are actually working")
     logger.info("=" * 70)
-    
+
     working_symbols = []
     failed_symbols = []
-    
+
     logger.info(f"Testing {len(ALL_SYMBOLS)} symbols...")
     logger.info("")
-    
+
     for symbol_info in ALL_SYMBOLS:
         if test_symbol_via_rest(symbol_info):
             working_symbols.append(symbol_info)
         else:
             failed_symbols.append(symbol_info)
-        
+
         # Small delay to avoid overwhelming the API
         import time
         time.sleep(0.5)
-    
+
     logger.info("")
     logger.info("=" * 70)
     logger.info("📊 TEST RESULTS:")
@@ -107,20 +107,20 @@ def main():
     logger.info(f"✅ Working symbols: {len(working_symbols)}")
     logger.info(f"❌ Failed symbols: {len(failed_symbols)}")
     logger.info("")
-    
+
     if working_symbols:
         logger.info("🎯 WORKING SYMBOLS (these should appear in AmiBroker):")
         for symbol_info in working_symbols:
             ami_format = f"{symbol_info['symbol']}-{symbol_info['exchange']}"
             logger.info(f"   ✓ {ami_format}")
-    
+
     if failed_symbols:
         logger.info("")
         logger.info("⚠️  FAILED SYMBOLS:")
         for symbol_info in failed_symbols:
             ami_format = f"{symbol_info['symbol']}-{symbol_info['exchange']}"
             logger.info(f"   ✗ {ami_format}")
-    
+
     logger.info("")
     logger.info("=" * 70)
     logger.info("💡 NEXT STEPS:")

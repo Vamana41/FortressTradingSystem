@@ -24,49 +24,49 @@ async def main():
     """Main launcher function"""
     parser = argparse.ArgumentParser(description="Fortress Trading System Launcher")
     parser.add_argument("--config", help="Configuration file path")
-    parser.add_argument("--log-level", default="INFO", 
+    parser.add_argument("--log-level", default="INFO",
                        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
                        help="Logging level")
-    parser.add_argument("--no-dashboard", action="store_true", 
+    parser.add_argument("--no-dashboard", action="store_true",
                        help="Disable dashboard")
     parser.add_argument("--test-mode", action="store_true",
                        help="Run in test mode (no actual trading)")
-    
+
     args = parser.parse_args()
-    
+
     # Set up signal handlers
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
-    
+
     print("🚀 Starting Fortress Trading System...")
     print("=" * 60)
-    
+
     # Import and start the main system
     try:
         from fortress.main import FortressTradingSystem
-        
+
         # Create system instance
         system = FortressTradingSystem(config_path=args.config)
-        
+
         # Configure logging
         import logging
         logging.basicConfig(
             level=getattr(logging, args.log_level),
             format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
         )
-        
+
         print(f"📊 Log level: {args.log_level}")
         print(f"🎯 Test mode: {'Enabled' if args.test_mode else 'Disabled'}")
         print(f"📱 Dashboard: {'Disabled' if args.no_dashboard else 'Enabled'}")
-        
+
         if args.test_mode:
             os.environ["TRADING_MODE"] = "paper"
             print("⚠️  Running in test mode - no actual trades will be executed")
-        
+
         # Start the system
         print("\n🔄 Initializing system components...")
         await system.start()
-        
+
     except KeyboardInterrupt:
         print("\n👋 User interrupted. Shutting down gracefully...")
     except Exception as e:
@@ -74,7 +74,7 @@ async def main():
         import traceback
         traceback.print_exc()
         return 1
-    
+
     return 0
 
 if __name__ == "__main__":

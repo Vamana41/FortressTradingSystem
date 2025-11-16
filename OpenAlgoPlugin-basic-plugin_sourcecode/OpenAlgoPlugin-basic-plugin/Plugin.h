@@ -4,40 +4,40 @@
 //
 // Version 2.1a
 ///////////////////////////////////////////////////////////////////////
-// Copyright (c) 2001-2010 AmiBroker.com. All rights reserved. 
+// Copyright (c) 2001-2010 AmiBroker.com. All rights reserved.
 //
-// Users and possessors of this source code are hereby granted a nonexclusive, 
+// Users and possessors of this source code are hereby granted a nonexclusive,
 // royalty-free copyright license to use this code in individual and commercial software.
 //
-// AMIBROKER.COM MAKES NO REPRESENTATION ABOUT THE SUITABILITY OF THIS SOURCE CODE FOR ANY PURPOSE. 
-// IT IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY OF ANY KIND. 
-// AMIBROKER.COM DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOURCE CODE, 
-// INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. 
-// IN NO EVENT SHALL AMIBROKER.COM BE LIABLE FOR ANY SPECIAL, INDIRECT, INCIDENTAL, OR 
-// CONSEQUENTIAL DAMAGES, OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, 
-// WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, 
+// AMIBROKER.COM MAKES NO REPRESENTATION ABOUT THE SUITABILITY OF THIS SOURCE CODE FOR ANY PURPOSE.
+// IT IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY OF ANY KIND.
+// AMIBROKER.COM DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOURCE CODE,
+// INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+// IN NO EVENT SHALL AMIBROKER.COM BE LIABLE FOR ANY SPECIAL, INDIRECT, INCIDENTAL, OR
+// CONSEQUENTIAL DAMAGES, OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS,
+// WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION,
 // ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOURCE CODE.
-// 
-// Any use of this source code must include the above notice, 
+//
+// Any use of this source code must include the above notice,
 // in the user documentation and internal comments to the code.
 ///////////////////////////////////////////////////////////////////////
 //
 // Version 1.0 : 2002-11-18 TJ
-// Version 2.0 : 2009-07-30 TJ  
-//       added support for 
-//			* 64-bit date time format 
+// Version 2.0 : 2009-07-30 TJ
+//       added support for
+//			* 64-bit date time format
 //			* float volume/open int
 //			* 2 user fields (Aux) in Quotation structure
 //			* 100 new user fields (fundamentals) in StockInfo
-//			* proper alignment for 64-bit platforms (8 byte boundary) 
+//			* proper alignment for 64-bit platforms (8 byte boundary)
 // Version 2.1 : 2010-03-31 TJ
-//          * struct PluginNotification has new field 
+//          * struct PluginNotification has new field
 //            StockInfo * pCurrentSINew
 //            and old field pCurrentSI type has changed to StockInfoFormat4 *
-//       
-// Version 2.1a: 
+//
+// Version 2.1a:
 //          * added #pragma(pack) to ensure AmiVar struct packing compatible with AmiBroker
-// 
+//
 
 
 ////////////////////////////////////////////////////
@@ -57,7 +57,7 @@
 #define PLUGIN_TYPE_AFL_AND_DATA 3
 #define PLUGIN_TYPE_OPTIMIZER 4
 
-// all exportable functions must have undecorated names 
+// all exportable functions must have undecorated names
 #ifdef _USRDLL
 #define PLUGINAPI extern "C" __declspec(dllexport)
 #else
@@ -69,7 +69,7 @@
 /////////////////////////////////////////////////////////////
 //
 // Structures and functions
-// COMMON for all kinds of AmiBroker plugins 
+// COMMON for all kinds of AmiBroker plugins
 //
 /////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////
@@ -90,7 +90,7 @@ typedef signed char SBYTE;
 #define PIDCODE(a, b, c, d ) ( ((a)<<24) | ((b)<<16) | ((c)<<8) | (d) )
 
 // PluginInfo structure holds
-// general information about plugin 
+// general information about plugin
 struct PluginInfo {
 						int		nStructSize;   // this is sizeof( struct PluginInfo )
 						int		nType;		   // plug-in type currently 1 - indicator is the only one supported
@@ -113,7 +113,7 @@ enum { VAR_NONE, VAR_FLOAT, VAR_ARRAY, VAR_STRING, VAR_DISP };
 typedef struct AmiVar
 {
     int type;
-    union 
+    union
     {
         float   val;
         float   *array;
@@ -129,7 +129,7 @@ typedef struct AmiVar
 // Each AmiBroker plug-in DLL must export the following
 // functions:
 // 1. GetPluginInfo	- called when DLL is loaded
-// 2. Init - called when AFL engine is being initialized 
+// 2. Init - called when AFL engine is being initialized
 // 3. Release - called when AFL engine is being closed
 
 PLUGINAPI int GetPluginInfo( struct PluginInfo *pInfo );
@@ -141,7 +141,7 @@ PLUGINAPI int Release(void);
 /////////////////////////////////////////////////////////////
 //
 // Structures and functions
-// for AFL Plugins 
+// for AFL Plugins
 //
 /////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////
@@ -150,14 +150,14 @@ PLUGINAPI int Release(void);
 // defines call-back function pointers
 // the structure is filled with correct
 // pointers by the AmiBroker and passed to DLL via SetSiteInterface() function call
-// 
+//
 // SiteInterface is used as a way to call-back AmiBroker built-in functions
 //
 
-struct SiteInterface 
+struct SiteInterface
 {
 				int			nStructSize;
-				int			(*GetArraySize) (void);	   
+				int			(*GetArraySize) (void);
 				float *		(*GetStockArray)( int nType );
 				AmiVar		(*GetVariable) ( const char *pszName );
 				void		(*SetVariable) ( const char *pszName, AmiVar newValue );
@@ -177,11 +177,11 @@ struct SiteInterface
 typedef struct FunDesc
 {
     AmiVar (*Function)( int NumArgs, AmiVar *ArgsTable );
-    UBYTE   ArrayQty;       // number of Array arguments required   
+    UBYTE   ArrayQty;       // number of Array arguments required
     UBYTE   StringQty;      // number of String arguments required
-    SBYTE   FloatQty;       // number of float args 
+    SBYTE   FloatQty;       // number of float args
     UBYTE   DefaultQty;     // number of default float args
-    float   *DefaultValues; // the pointer to defaults table 
+    float   *DefaultValues; // the pointer to defaults table
 } FunDesc;
 
 
@@ -202,20 +202,20 @@ typedef struct FunctionTag
 
 
 // Indicator plugin exported functions:
-// 1. GetFunctionTable - called when AFL engine is being initialized 
-// 1. SetSiteInteface - called when AFL engine is being initialized 
+// 1. GetFunctionTable - called when AFL engine is being initialized
+// 1. SetSiteInteface - called when AFL engine is being initialized
 //
 // Each function may be called multiple times.
 //
 // The order of calling functions during intialization is
 // as follows:
 //
-// SetSiteInterface -> GetFunctionTable	-> Init -> 
+// SetSiteInterface -> GetFunctionTable	-> Init ->
 // ... normal work ....
 // Release
 //
 // This cycle may repeat multiple times
-// 
+//
 // All functions in the plug in DLL use _cdecl calling convention
 // (the default for C compiler)
 
@@ -226,7 +226,7 @@ PLUGINAPI int SetSiteInterface( struct SiteInterface *pInterface );
 // Global-scope data for indicator plugins
 ////////////////////////////////////////
 
-// FunctionTable should be defined 
+// FunctionTable should be defined
 // in the implementation file of your functions
 extern FunctionTag gFunctionTable[];
 extern int		   gFunctionTableSize;
@@ -241,7 +241,7 @@ extern struct SiteInterface gSite;
 /////////////////////////////////////////////////////////////
 //
 // Structures and functions
-// for DATA FEED plugins 
+// for DATA FEED plugins
 //
 /////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////
@@ -297,7 +297,7 @@ struct PackedDate {
                         unsigned int Day : 5;       // 1..31
                         unsigned int Month : 4;     // 1..12
                         unsigned int Year : 12;		// 0..4095
-                                             
+
                     };
 
 // 8 byte (64 bit) date time stamp
@@ -399,7 +399,7 @@ struct RecentInfo
 	int		nDateUpdate; // format YYYYMMDD
 	int		nTimeUpdate; // format HHMMSS
 	float	fTradeVol;	// NEW 5.27 field
-	float	fTotalVol;	// NEW 5.27 field 
+	float	fTotalVol;	// NEW 5.27 field
 };
 
 // context structure for GetQuotesEx
@@ -418,7 +418,7 @@ struct PluginStatus
 };
 
 
-// REQUIRED: GetQuotes function, MUST be exported by every data plugin 
+// REQUIRED: GetQuotes function, MUST be exported by every data plugin
 // This is LEGACY function for version 5.26 and below
 PLUGINAPI int GetQuotes( LPCTSTR pszTicker, int nPeriodicity, int nLastValid, int nSize, struct QuotationFormat4 *pQuotes );
 
@@ -426,7 +426,7 @@ PLUGINAPI int GetQuotes( LPCTSTR pszTicker, int nPeriodicity, int nLastValid, in
 // handles new Quotation format with 64 bit date/time stamp and floating point volume/open int
 // and new Aux fields
 // it also takes pointer to context that is reserved for future use (can be null)
-// Called by AmiBroker 5.27 and above 
+// Called by AmiBroker 5.27 and above
 PLUGINAPI int GetQuotesEx( LPCTSTR pszTicker, int nPeriodicity, int nLastValid, int nSize, struct Quotation *pQuotes, GQEContext *pContext );
 
 // GetExtra data is optional function for retrieving non-quotation data
@@ -436,7 +436,7 @@ PLUGINAPI AmiVar GetExtraData( LPCTSTR pszTicker, LPCTSTR pszName, int nArraySiz
 // in File->Database Settings
 PLUGINAPI int Configure( LPCTSTR pszPath, struct InfoSite *pSite );
 
-// GetRecentInfo function is optional, used only by real-time plugins 
+// GetRecentInfo function is optional, used only by real-time plugins
 PLUGINAPI struct RecentInfo * GetRecentInfo( LPCTSTR pszTicker );
 
 // new API function, optional, only for RT plugins
@@ -448,7 +448,7 @@ PLUGINAPI int GetSymbolLimit( void );
 // GetPluginStatus function is optional, used mostly by few real-time plugins
 PLUGINAPI int GetPluginStatus( struct PluginStatus *status );
 
-// SetDatabasePath is now obsolete. 
+// SetDatabasePath is now obsolete.
 // You should NOT implement it in newly written plugins.
 // Implement Notify() instead.
 // This function is called when new database is loaded
@@ -461,9 +461,9 @@ PLUGINAPI int SetTimeBase( int nTimeBase );
 struct _IntradaySettings {
 	int					TimeShift; // in hours
 	int					FilterAfterHours; //
-	DATE_TIME_INT		SessionStart; // bit encoding HHHHH.MMMMMM.0000	 hours << 10 | ( minutes << 4 ) 
+	DATE_TIME_INT		SessionStart; // bit encoding HHHHH.MMMMMM.0000	 hours << 10 | ( minutes << 4 )
 	DATE_TIME_INT		SessionEnd;	  // 			  //
-	int					FilterWeekends;		   
+	int					FilterWeekends;
 	int					DailyCompressionMode; // 0 - exchange, 1 - local, 2 -session based
 	DATE_TIME_INT		NightSessionStart;
 	DATE_TIME_INT		NightSessionEnd;
@@ -479,7 +479,7 @@ struct _Workspace {
 	int		ReservedB[ 8 ];
 	BOOL	AllowMixedEODIntra;
 	BOOL	RequestDataOnSave;
-	BOOL	PadNonTradingDays;	 
+	BOOL	PadNonTradingDays;
 	int		ReservedC;
 	struct  _IntradaySettings IS;
 	int		ReservedD;
@@ -487,7 +487,7 @@ struct _Workspace {
 
 
 #define MAX_SYMBOL_LEN 48
-struct StockInfo {		
+struct StockInfo {
                         char    ShortName[MAX_SYMBOL_LEN];
 						char	AliasName[MAX_SYMBOL_LEN];
 						char	WebID[MAX_SYMBOL_LEN];
@@ -501,7 +501,7 @@ struct StockInfo {
 						int		GroupID;
 						int		IndustryID;
 						int		GICS;
-                        int     Flags;          /* continuous etc.*/     
+                        int     Flags;          /* continuous etc.*/
                         int     MoreFlags;          /*  */
 						float	MarginDeposit;		/* new futures fields - active if SI_MOREFLAGS_FUTURES is set */
 						float	PointValue;
@@ -517,8 +517,8 @@ struct StockInfo {
 						float   DividendPerShare;	//
 						float   BookValuePerShare;
 						float   PEGRatio;			// PE Growth ratio
-						float   ProfitMargin;	
-						float	OperatingMargin;    
+						float   ProfitMargin;
+						float	OperatingMargin;
 						float	OneYearTargetPrice;
 						float	ReturnOnAssets;
 						float	ReturnOnEquity;
@@ -536,8 +536,8 @@ struct StockInfo {
 						float	EPSEstCurrentYear;
 						float	EPSEstNextYear;
 						float	EPSEstNextQuarter;
-						float   ForwardDividendPerShare;            
-						float	Beta;	
+						float   ForwardDividendPerShare;
+						float	Beta;
 						float	OperatingCashFlow;
 						float	LeveredFreeCashFlow;
 						float	ReservedInternal[ 28 ];
@@ -575,7 +575,7 @@ struct OptimizeItem
 	float   Best;
 };
 
-#define MAX_OPTIMIZE_ITEMS 100 
+#define MAX_OPTIMIZE_ITEMS 100
 
 struct OptimizeParams
 {
