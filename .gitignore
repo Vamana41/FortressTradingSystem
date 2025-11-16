@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+
+# Environment
+.env
+.env.*
+
+# IDEs
+.vscode/
+.idea/
+
+# Logs & Data
+*.log
+*.sqlite
+*.db
+*.csv
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets & env
+.env
+.env.*
+keys/
+
+# Binaries & artifacts
+*.dll
+*.pdf
+*.docx
+
+# Nested repos or copies
+FortressTradingSystem - Copy/
