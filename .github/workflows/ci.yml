@@ -25,6 +25,13 @@ jobs:
           python -m pip install -r openalgo/requirements.txt
           python -m pip install -r requirements-dev.txt
           python -m pip install ruff mypy pytest pip-audit
+      - name: Cache dev lock
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-dev-${{ hashFiles('requirements-dev.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-dev-
       - name: Lint
         run: ruff check openalgo
       - name: Type-check
