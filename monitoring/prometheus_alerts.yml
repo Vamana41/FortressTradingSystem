@@ -1,0 +1,19 @@
+groups:
+  - name: fortress-sidecar-synthetic-alerts
+    rules:
+      - alert: SyntheticFutureDataStale
+        expr: fortress_sidecar_synthetic_future_stale_total > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Synthetic futures data is stale
+          description: One or more underlyings have stale synthetic futures samples.
+      - alert: SyntheticFutureStaleRunsExceeded
+        expr: fortress_sidecar_synthetic_future_stale_runs{underlying!=""} >= 3
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: Synthetic futures data stale for consecutive runs
+          description: Synthetic futures data for {{ $labels.underlying }} stale for consecutive scheduler runs.

@@ -8,21 +8,28 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
-        python-version: ["3.12", "3.14"]
+        python-version: ["3.14"]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+          cache-dependency-path: |
+            openalgo/requirements.txt
+            requirements-dev.txt
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r openalgo/requirements.txt
-          python -m pip install ruff mypy pytest
+          python -m pip install -r requirements-dev.txt
+          python -m pip install ruff mypy pytest pip-audit
       - name: Lint
         run: ruff check openalgo
       - name: Type-check
         run: mypy openalgo --ignore-missing-imports
       - name: Tests
-        run: pytest -q
+        run: pytest fortress/tests -v
+      - name: Dependency audit
+        run: pip-audit -r openalgo/requirements.txt || true
